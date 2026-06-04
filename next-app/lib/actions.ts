@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { supabase } from "./supabase";
 import bcrypt from "bcryptjs";
+import { signToken } from "./auth";
 
 // 1. Upload File
 export async function uploadFile(formData: FormData, bucketName: string) {
@@ -156,8 +158,15 @@ export async function getSubmissionsByAssignment(assignmentId: string) {
 }
 
 // 7. Login
-export async function login(username: string, passwordString: string) {
+export async function handleLogin(formData: FormData) {
   try {
+    const username = formData.get("username") as string;
+    const passwordString = formData.get("password") as string;
+
+    if (!username || !passwordString) {
+      return { error: "Username and password are required" };
+    }
+
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -174,27 +183,27 @@ export async function login(username: string, passwordString: string) {
       return { error: "Invalid username or password" };
     }
 
+    // Create a JWT token
+    const token = await signToken({
+      id: user.id,
+      username: user.username,
+    });
+
     // Set HTTP-only cookie using next/headers
-    // Note: cookies() requires await in Next.js 15+
     const cookieStore = await cookies();
-    cookieStore.set("auth_token", user.id, {
+    cookieStore.set("auth_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+      maxAge: 60 * 60 * 24, // 1 day
     });
 
-    return { 
-      success: true, 
-      user: { 
-        id: user.id, 
-        username: user.username, 
-        full_name: user.full_name 
-      } 
-    };
   } catch (error: any) {
     console.error("Error in login:", error);
     return { error: error.message || "An unexpected error occurred" };
   }
+
+  // Redirect must be outside the try-catch block because it throws an error internally in Next.js
+  redirect("/dashboard");
 }
