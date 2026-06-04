@@ -1,8 +1,10 @@
-import { createAssignment, submitSolution, getAssignments, login } from '../lib/actions';
+import { createAssignment, submitSolution, getAssignments, handleLogin, logout } from '../lib/actions';
 import { supabase } from '../lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
+import { signToken } from '../lib/auth';
 
 // Mock dependencies
 jest.mock('../lib/supabase', () => ({
@@ -22,8 +24,16 @@ jest.mock('next/headers', () => ({
   cookies: jest.fn(),
 }));
 
+jest.mock('next/navigation', () => ({
+  redirect: jest.fn(),
+}));
+
 jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
+}));
+
+jest.mock('../lib/auth', () => ({
+  signToken: jest.fn(),
 }));
 
 describe('Server Actions', () => {
@@ -84,7 +94,7 @@ describe('Server Actions', () => {
     it('should return an array of mocked assignment data with formatted submission counts', async () => {
       const mockData = [
         { id: 1, title: 'Assignment 1', submissions: [{ count: 5 }] },
-        { id: 2, title: 'Assignment 2', submissions: [] } // Test when count is missing
+        { id: 2, title: 'Assignment 2', submissions: [] } 
       ];
       
       const orderMock = jest.fn().mockResolvedValue({ data: mockData, error: null });
@@ -104,17 +114,22 @@ describe('Server Actions', () => {
     });
   });
 
-  describe('login', () => {
+  describe('handleLogin', () => {
     it('should handle invalid username (user not found)', async () => {
       const singleMock = jest.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } });
       const eqMock = jest.fn().mockReturnValue({ single: singleMock });
       const selectMock = jest.fn().mockReturnValue({ eq: eqMock });
       (supabase.from as jest.Mock).mockReturnValue({ select: selectMock });
 
-      const result = await login('baduser', 'password');
+      const formData = new FormData();
+      formData.append('username', 'baduser');
+      formData.append('password', 'password');
 
-      expect(result.error).toBe('Invalid username or password');
+      const result = await handleLogin(formData);
+
+      expect(result?.error).toBe('Invalid username or password');
       expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(cookies).not.toHaveBeenCalled();
     });
 
     it('should handle invalid password', async () => {
@@ -128,15 +143,20 @@ describe('Server Actions', () => {
 
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      const result = await login('user1', 'wrongpass');
+      const formData = new FormData();
+      formData.append('username', 'user1');
+      formData.append('password', 'wrongpass');
+
+      const result = await handleLogin(formData);
 
       expect(bcrypt.compare).toHaveBeenCalledWith('wrongpass', 'hash');
-      expect(result.error).toBe('Invalid username or password');
+      expect(result?.error).toBe('Invalid username or password');
+      expect(cookies).not.toHaveBeenCalled();
     });
 
-    it('should handle valid credentials by setting a cookie', async () => {
+    it('should handle valid credentials by setting a cookie and redirecting', async () => {
       const singleMock = jest.fn().mockResolvedValue({ 
-        data: { id: 'u1', username: 'user1', full_name: 'User One', password_hash: 'hash' }, 
+        data: { id: 'u1', username: 'user1', password_hash: 'hash' }, 
         error: null 
       });
       const eqMock = jest.fn().mockReturnValue({ single: singleMock });
@@ -144,21 +164,38 @@ describe('Server Actions', () => {
       (supabase.from as jest.Mock).mockReturnValue({ select: selectMock });
 
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (signToken as jest.Mock).mockResolvedValue('mock.jwt.token');
 
       const setCookieMock = jest.fn();
-      // In next/headers 15+, cookies() returns a Promise resolving to ReadonlyRequestCookies
       (cookies as jest.Mock).mockResolvedValue({ set: setCookieMock }); 
 
-      const result = await login('user1', 'correctpass');
+      const formData = new FormData();
+      formData.append('username', 'user1');
+      formData.append('password', 'correctpass');
 
+      await handleLogin(formData);
+
+      expect(signToken).toHaveBeenCalledWith({ id: 'u1', username: 'user1' });
       expect(cookies).toHaveBeenCalled();
       expect(setCookieMock).toHaveBeenCalledWith(
         'auth_token', 
-        'u1', 
-        expect.objectContaining({ httpOnly: true })
+        'mock.jwt.token', 
+        expect.objectContaining({ httpOnly: true, maxAge: 86400 })
       );
-      expect(result.success).toBe(true);
-      expect(result.user).toEqual({ id: 'u1', username: 'user1', full_name: 'User One' });
+      expect(redirect).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  describe('logout', () => {
+    it('should delete the auth_token cookie and redirect to /login', async () => {
+      const deleteCookieMock = jest.fn();
+      (cookies as jest.Mock).mockResolvedValue({ delete: deleteCookieMock });
+
+      await logout();
+
+      expect(cookies).toHaveBeenCalled();
+      expect(deleteCookieMock).toHaveBeenCalledWith('auth_token');
+      expect(redirect).toHaveBeenCalledWith('/login');
     });
   });
 });

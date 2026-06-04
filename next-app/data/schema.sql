@@ -7,6 +7,7 @@ CREATE TABLE public.users (
   password_hash text NOT NULL,
   full_name character varying NOT NULL,
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  role character varying DEFAULT 'student'::character varying,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.assignments (
@@ -27,8 +28,3 @@ CREATE TABLE public.submissions (
   CONSTRAINT submissions_pkey PRIMARY KEY (id),
   CONSTRAINT submissions_assignment_id_fkey FOREIGN KEY (assignment_id) REFERENCES public.assignments(id)
 );
-
--- Grant necessary privileges to Supabase roles
-GRANT SELECT ON public.users TO anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.assignments TO anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.submissions TO anon, authenticated;

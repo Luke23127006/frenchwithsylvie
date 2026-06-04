@@ -207,3 +207,10 @@ export async function handleLogin(formData: FormData) {
   // Redirect must be outside the try-catch block because it throws an error internally in Next.js
   redirect("/dashboard");
 }
+
+// 8. Logout
+export async function logout() {
+  const cookieStore = await cookies();
+  cookieStore.delete("auth_token");
+  redirect("/login");
+}

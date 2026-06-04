@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Copy, Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { logout } from "@/lib/actions";
 import {
   Card,
   CardContent,
@@ -46,9 +47,16 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
-        <p className="text-muted-foreground">Manage your assignments and view student submissions.</p>
+      <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
+          <p className="text-muted-foreground">Manage your assignments and view student submissions.</p>
+        </div>
+        <form action={logout}>
+          <Button variant="outline" type="submit">
+            Logout
+          </Button>
+        </form>
       </div>
 
       <div className="grid gap-8">

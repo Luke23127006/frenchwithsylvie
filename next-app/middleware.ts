@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 import { verifyToken } from './lib/auth';
 
 export async function middleware(request: NextRequest) {
+  // Only protect /dashboard routes (defensive check alongside the matcher)
+  if (!request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get('auth_token')?.value;
 
   // If no token exists, redirect to login
