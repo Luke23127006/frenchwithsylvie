@@ -1,0 +1,12 @@
+-- Seed script for French with Sylvie MVP
+-- All passwords are '123456'
+
+INSERT INTO public.users (username, password_hash, full_name, role) 
+VALUES
+  -- 1 Teacher Account
+  ('sylvie', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Sylvie Dupont', 'teacher'),
+  
+  -- 3 Student Accounts
+  ('luc', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Luc Martin', 'student'),
+  ('marie', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Marie Curie', 'student'),
+  ('jean', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Jean Valjean', 'student');
