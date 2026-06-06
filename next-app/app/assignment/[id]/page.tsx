@@ -1,4 +1,4 @@
-import { getAssignmentById } from "@/lib/actions";
+import { getAssignmentById, getStudentSubmission } from "@/lib/actions";
 import StudentPortalClient from "./StudentPortalClient";
 import { notFound } from "next/navigation";
 
@@ -11,5 +11,7 @@ export default async function StudentPortalPage({ params }: { params: Promise<{ 
     notFound();
   }
 
-  return <StudentPortalClient assignment={assignment} />;
+  const { data: existingSubmission } = await getStudentSubmission(id);
+
+  return <StudentPortalClient assignment={assignment} existingSubmission={existingSubmission} />;
 }

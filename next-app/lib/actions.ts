@@ -286,6 +286,58 @@ export async function updateAssignees(assignmentId: string, newAssigneeIds: stri
   }
 }
 
+// NEW: 12. Grade Submission
+export async function gradeSubmission(submissionId: string, grade: string, feedback: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { data, error } = await supabase
+      .from("submissions")
+      .update({ grade, feedback })
+      .eq("id", submissionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath(`/dashboard/assignment/${data.assignment_id}`);
+    return { data };
+  } catch (error: any) {
+    console.error("Error in gradeSubmission:", error);
+    return { error: error.message };
+  }
+}
+
+// NEW: 13. Get Student Submission
+export async function getStudentSubmission(assignmentId: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'student') return { error: "Unauthorized" };
+
+    const { data, error } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("assignment_id", assignmentId)
+      .eq("student_id", payload.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { data };
+  } catch (error: any) {
+    console.error("Error in getStudentSubmission:", error);
+    return { error: error.message };
+  }
+}
+
 // 7. Login
 export async function handleLogin(formData: FormData) {
   let redirectUrl = "";

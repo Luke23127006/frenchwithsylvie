@@ -1,4 +1,4 @@
-import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher } from '../lib/actions';
+import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission } from '../lib/actions';
 import { supabase } from '../lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -131,6 +131,58 @@ describe('Server Actions', () => {
 
       expect(supabase.from).toHaveBeenCalledWith('assignments');
       expect(selectMock).toHaveBeenCalledWith(expect.not.stringContaining('assignment_assignees!inner'));
+    });
+  });
+
+  describe('gradeSubmission', () => {
+    it('should update grade and feedback when teacher is authenticated', async () => {
+      const mockCookieGet = jest.fn().mockReturnValue({ value: 'valid.token' });
+      (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
+      (verifyToken as jest.Mock).mockResolvedValue({ id: 'teacher-1', role: 'teacher' });
+
+      const singleMock = jest.fn().mockResolvedValue({ data: { assignment_id: 'a1', id: 's1', grade: 'A', feedback: '<p>Good</p>' }, error: null });
+      const selectMock = jest.fn().mockReturnValue({ single: singleMock });
+      const eqMock = jest.fn().mockReturnValue({ select: selectMock });
+      const updateMock = jest.fn().mockReturnValue({ eq: eqMock });
+      (supabase.from as jest.Mock).mockReturnValue({ update: updateMock });
+
+      const result = await gradeSubmission('s1', 'A', '<p>Good</p>');
+
+      expect(supabase.from).toHaveBeenCalledWith('submissions');
+      expect(updateMock).toHaveBeenCalledWith({ grade: 'A', feedback: '<p>Good</p>' });
+      expect(revalidatePath).toHaveBeenCalledWith('/dashboard/assignment/a1');
+      expect(result.data.grade).toBe('A');
+    });
+
+    it('should fail if user is not a teacher', async () => {
+      const mockCookieGet = jest.fn().mockReturnValue({ value: 'valid.token' });
+      (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
+      (verifyToken as jest.Mock).mockResolvedValue({ id: 'student-1', role: 'student' });
+
+      const result = await gradeSubmission('s1', 'A', 'Good');
+      expect(result.error).toBe('Unauthorized');
+    });
+  });
+
+  describe('getStudentSubmission', () => {
+    it('should fetch the submission for the authenticated student', async () => {
+      const mockCookieGet = jest.fn().mockReturnValue({ value: 'valid.token' });
+      (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
+      (verifyToken as jest.Mock).mockResolvedValue({ id: 'student-1', role: 'student' });
+
+      const maybeSingleMock = jest.fn().mockResolvedValue({ data: { id: 'sub-1' }, error: null });
+      const eqMock2 = jest.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+      const eqMock1 = jest.fn().mockReturnValue({ eq: eqMock2 });
+      const selectMock = jest.fn().mockReturnValue({ eq: eqMock1 });
+      (supabase.from as jest.Mock).mockReturnValue({ select: selectMock });
+
+      const result = await getStudentSubmission('a1');
+
+      expect(supabase.from).toHaveBeenCalledWith('submissions');
+      expect(selectMock).toHaveBeenCalledWith('*');
+      expect(eqMock1).toHaveBeenCalledWith('assignment_id', 'a1');
+      expect(eqMock2).toHaveBeenCalledWith('student_id', 'student-1');
+      expect(result.data).toEqual({ id: 'sub-1' });
     });
   });
 });

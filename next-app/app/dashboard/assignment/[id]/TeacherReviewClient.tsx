@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,12 +19,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import Link from "next/link";
-import { updateAssignees } from "@/lib/actions";
+import { updateAssignees, gradeSubmission } from "@/lib/actions";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { getRatingInfo } from "@/lib/utils";
 
 interface Student {
   id: string;
@@ -57,7 +60,21 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>(
     assignmentData.assignees.map(a => a.id)
   );
+  
+  // Grading State
+  const [grade, setGrade] = useState("");
+  const [feedback, setFeedback] = useState("");
+
   const [isPending, startTransition] = useTransition();
+
+  // Update grading state when assignee changes
+  const handleSelectAssignee = (assignee: Assignee) => {
+    setSelectedAssignee(assignee);
+    if (assignee.submission) {
+      setGrade(assignee.submission.grade || "");
+      setFeedback(assignee.submission.feedback || "");
+    }
+  };
 
   const handleStudentToggle = (studentId: string) => {
     setSelectedStudentIds((prev) => 
@@ -76,6 +93,39 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
         } else {
           toast.success("Assignees updated successfully!");
           setIsEditDialogOpen(false);
+        }
+      } catch (e: any) {
+        toast.error("Error: " + e.message);
+      }
+    });
+  };
+
+  const handleSaveGrade = () => {
+    if (!selectedAssignee || !selectedAssignee.submission) return;
+    
+    // Validation
+    const gradeNum = parseInt(grade, 10);
+    if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
+      toast.error("Grade must be an integer between 0 and 100.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await gradeSubmission(selectedAssignee.submission.id, gradeNum.toString(), feedback);
+        if (result.error) {
+          toast.error("Failed to save grade: " + result.error);
+        } else {
+          toast.success("Grade and feedback saved successfully!");
+          // Update local state to reflect changes without a full page reload
+          setSelectedAssignee({
+            ...selectedAssignee,
+            submission: {
+              ...selectedAssignee.submission,
+              grade,
+              feedback
+            }
+          });
         }
       } catch (e: any) {
         toast.error("Error: " + e.message);
@@ -163,12 +213,12 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-[80vh]">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative items-start">
         {/* Left Panel: Assignees List */}
-        <Card className="md:col-span-4 flex flex-col h-full overflow-hidden">
+        <Card className="md:col-span-3 flex flex-col h-[calc(100vh-8rem)] overflow-hidden sticky top-8">
           <CardHeader className="pb-3 border-b bg-slate-50/50">
             <CardTitle className="text-lg flex justify-between items-center">
-              Assigned Students
+              Assigned
               <Badge variant="secondary">{assignmentData.assignees.length}</Badge>
             </CardTitle>
           </CardHeader>
@@ -183,7 +233,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                 assignmentData.assignees.map((assignee) => (
                   <button
                     key={assignee.id}
-                    onClick={() => setSelectedAssignee(assignee)}
+                    onClick={() => handleSelectAssignee(assignee)}
                     className={`w-full text-left p-4 hover:bg-slate-50 transition-colors flex items-center justify-between group ${
                       selectedAssignee?.id === assignee.id ? "bg-primary/5 border-l-4 border-l-primary" : "border-l-4 border-l-transparent"
                     }`}
@@ -212,55 +262,107 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
           </ScrollArea>
         </Card>
 
-        {/* Right Panel: Submission Viewer */}
-        <Card className="md:col-span-8 flex flex-col h-full overflow-hidden bg-slate-50/50">
-          {selectedAssignee ? (
-            selectedAssignee.has_submitted ? (
-              <>
-                <CardHeader className="pb-3 border-b bg-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-xl">{selectedAssignee.full_name}'s Submission</CardTitle>
-                      <CardDescription>
-                        Submitted on {new Date(selectedAssignee.submission.submitted_at).toLocaleString()}
-                      </CardDescription>
+        {/* Right Panel: Submission Viewer & Grading */}
+        <div className="md:col-span-9 flex flex-col gap-6">
+          <Card className="flex flex-col overflow-hidden bg-slate-50/50 h-[800px]">
+            {selectedAssignee ? (
+              selectedAssignee.has_submitted ? (
+                <>
+                  <CardHeader className="pb-3 border-b bg-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-xl">{selectedAssignee.full_name}'s Submission</CardTitle>
+                        <CardDescription>
+                          Submitted on {new Date(selectedAssignee.submission.submitted_at).toLocaleString()}
+                        </CardDescription>
+                      </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={selectedAssignee.submission.file_url} target="_blank" rel="noopener noreferrer">
+                          Open Original
+                        </a>
+                      </Button>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={selectedAssignee.submission.file_url} target="_blank" rel="noopener noreferrer">
-                        Open Original
-                      </a>
-                    </Button>
+                  </CardHeader>
+                  <div className="flex-1 bg-slate-100/50 p-4">
+                    <div className="w-full h-full bg-white rounded-lg border shadow-sm overflow-hidden relative">
+                      <iframe 
+                        src={selectedAssignee.submission.file_url} 
+                        className="absolute inset-0 w-full h-full"
+                        title={`${selectedAssignee.full_name} submission`}
+                      />
+                    </div>
                   </div>
-                </CardHeader>
-                <div className="flex-1 bg-slate-100/50 p-4">
-                  <div className="w-full h-full bg-white rounded-lg border shadow-sm overflow-hidden relative">
-                    <iframe 
-                      src={selectedAssignee.submission.file_url} 
-                      className="absolute inset-0 w-full h-full"
-                      title={`${selectedAssignee.full_name} submission`}
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
+                  <Clock className="h-16 w-16 mb-4 opacity-20" />
+                  <h3 className="text-xl font-medium text-slate-700 mb-1">Waiting for Submission</h3>
+                  <p className="text-center max-w-sm">
+                    {selectedAssignee.full_name} hasn't submitted their work for this assignment yet.
+                  </p>
+                </div>
+              )
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
+                <FileText className="h-16 w-16 mb-4 opacity-20" />
+                <h3 className="text-xl font-medium text-slate-700 mb-1">Select a Student</h3>
+                <p className="text-center max-w-sm">
+                  Click on a student from the left panel to view their submission status and submitted files.
+                </p>
+              </div>
+            )}
+          </Card>
+
+          {/* Grading Panel (Only shown if a submitted assignee is selected) */}
+          {selectedAssignee && selectedAssignee.has_submitted && (
+            <Card className="flex-shrink-0">
+              <CardHeader className="py-4">
+                <CardTitle className="text-lg">Grading & Feedback</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-[200px_1fr]">
+                  <div className="space-y-2">
+                    <Label htmlFor="grade">Grade / Score (0-100)</Label>
+                    <div className="flex space-x-2 items-center">
+                      <Input 
+                        id="grade" 
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="e.g. 95" 
+                        value={grade}
+                        onChange={(e) => setGrade(e.target.value)}
+                        disabled={isPending}
+                        className="w-24"
+                      />
+                      <span className="text-muted-foreground">/ 100</span>
+                    </div>
+                    {getRatingInfo(grade) && (
+                      <div className="mt-2">
+                        <Badge className={getRatingInfo(grade)?.color}>
+                          {getRatingInfo(grade)?.label}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Feedback (Rich Text)</Label>
+                    <RichTextEditor 
+                      value={feedback} 
+                      onChange={setFeedback}
+                      disabled={isPending}
                     />
                   </div>
                 </div>
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
-                <Clock className="h-16 w-16 mb-4 opacity-20" />
-                <h3 className="text-xl font-medium text-slate-700 mb-1">Waiting for Submission</h3>
-                <p className="text-center max-w-sm">
-                  {selectedAssignee.full_name} hasn't submitted their work for this assignment yet.
-                </p>
-              </div>
-            )
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
-              <FileText className="h-16 w-16 mb-4 opacity-20" />
-              <h3 className="text-xl font-medium text-slate-700 mb-1">Select a Student</h3>
-              <p className="text-center max-w-sm">
-                Click on a student from the left panel to view their submission status and submitted files.
-              </p>
-            </div>
+                <div className="mt-4 flex justify-end">
+                  <Button onClick={handleSaveGrade} disabled={isPending}>
+                    <Save className="mr-2 h-4 w-4" /> {isPending ? "Saving..." : "Save Grade"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
