@@ -94,7 +94,7 @@ export async function getAssignments() {
         .select(`
           *,
           assignment_assignees!inner(student_id),
-          submissions (count)
+          submissions (id, student_id)
         `)
         .eq('assignment_assignees.student_id', payload.id)
         .is('deleted_at', null)
@@ -104,7 +104,8 @@ export async function getAssignments() {
       if (error) throw error;
       const formattedData = data.map((assignment: any) => ({
         ...assignment,
-        submissions_count: assignment.submissions?.[0]?.count || 0
+        submissions_count: assignment.submissions?.length || 0,
+        has_submitted: assignment.submissions?.some((sub: any) => sub.student_id === payload.id) || false
       }));
       return { data: formattedData };
     } else {
