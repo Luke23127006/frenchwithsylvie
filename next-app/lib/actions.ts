@@ -130,13 +130,24 @@ export async function getAssignments() {
   }
 }
 
-// 4. Get Assignment By Id
+// 4. Get Assignment By Id (With Authorization Check)
 export async function getAssignmentById(id: string) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload) return { error: "Invalid token" };
+
     const { data, error } = await supabase
       .from("assignments")
-      .select("*")
+      .select(`
+        *,
+        assignment_assignees(student_id)
+      `)
       .eq("id", id)
+      .is("deleted_at", null)
       .single();
 
     if (error) {
@@ -144,7 +155,23 @@ export async function getAssignmentById(id: string) {
       return { error: error.message };
     }
 
-    return { data };
+    if (payload.role === "student") {
+      if (data.is_hidden) {
+        return { error: "Assignment not found" }; // Hidden acts like it doesn't exist
+      }
+      
+      const isAssigned = data.assignment_assignees?.some(
+        (a: any) => a.student_id === payload.id
+      );
+      
+      if (!isAssigned) {
+        return { authError: "You are not assigned to this assignment." };
+      }
+    }
+
+    // Remove the assignees array before returning to keep payload clean
+    const { assignment_assignees, ...assignmentData } = data;
+    return { data: assignmentData };
   } catch (error: any) {
     console.error("Error in getAssignmentById:", error);
     return { error: error.message || "An unexpected error occurred" };

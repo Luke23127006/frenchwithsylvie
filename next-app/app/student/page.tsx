@@ -1,5 +1,6 @@
 import { getAssignments } from "@/lib/actions";
 import StudentDashboardClient from "./StudentDashboardClient";
+import { Suspense } from "react";
 
 export default async function StudentDashboardPage() {
   const { data: assignments, error } = await getAssignments();
@@ -13,5 +14,9 @@ export default async function StudentDashboardPage() {
     );
   }
 
-  return <StudentDashboardClient assignments={assignments || []} />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading dashboard...</div>}>
+      <StudentDashboardClient assignments={assignments || []} />
+    </Suspense>
+  );
 }

@@ -11,12 +11,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
 interface StudentDashboardClientProps {
   assignments: any[];
 }
 
 export default function StudentDashboardClient({ assignments }: StudentDashboardClientProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get("error") === "not_assigned") {
+      toast.error("You do not have access to this assignment.", { id: "not_assigned_error" });
+      router.replace("/student"); // clean the URL
+    }
+  }, [searchParams, router]);
+
   return (
     <div className="container mx-auto max-w-4xl p-4 md:p-8 space-y-8">
       <div className="mb-6">

@@ -7,6 +7,7 @@ VALUES
   ('sylvie', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Sylvie Dupont', 'teacher'),
   
   -- 3 Student Accounts
-  ('luc', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Luc Martin', 'student'),
-  ('marie', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Marie Curie', 'student'),
-  ('jean', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Jean Valjean', 'student');
+  ('phuonganh', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Luc Martin', 'student'),
+  ('tracy', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Marie Curie', 'student'),
+  ('baotran', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Jean Valjean', 'student'),
+  ('luke', '$2b$10$K590fE9gfmTGu.XDeSEfMe8SXUgqaVCkhBPw/vGdbSe2bHgX3CrKi', 'Luke', 'student');
