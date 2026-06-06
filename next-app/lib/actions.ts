@@ -553,7 +553,7 @@ export async function getTrashedAssignments() {
 
 // 7. Login
 export async function handleLogin(formData: FormData) {
-  let redirectUrl = "";
+  let redirectUrl = formData.get("redirectUrl") as string || "";
   try {
     const username = formData.get("username") as string;
     const passwordString = formData.get("password") as string;
@@ -594,7 +594,9 @@ export async function handleLogin(formData: FormData) {
       maxAge: 60 * 60 * 24, // 1 day
     });
 
-    redirectUrl = user.role === "student" ? "/student" : "/dashboard";
+    if (!redirectUrl) {
+      redirectUrl = user.role === "student" ? "/student" : "/dashboard";
+    }
 
   } catch (error: any) {
     console.error("Error in login:", error);

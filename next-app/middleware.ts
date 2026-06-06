@@ -18,7 +18,9 @@ export async function middleware(request: NextRequest) {
 
   // If no token exists, redirect to login
   if (!token) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
   }
 
   // Verify the JWT token
@@ -26,7 +28,9 @@ export async function middleware(request: NextRequest) {
 
   // If verification fails (expired or invalid), delete cookie and redirect
   if (!payload) {
-    const response = NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    const response = NextResponse.redirect(loginUrl);
     response.cookies.delete('auth_token');
     return response;
   }

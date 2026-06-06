@@ -22,6 +22,13 @@ export default function LoginPage() {
   const onSubmit = (formData: FormData) => {
     startTransition(async () => {
       setError(null);
+      
+      const params = new URLSearchParams(window.location.search);
+      const redirectUrl = params.get("redirect");
+      if (redirectUrl) {
+        formData.append("redirectUrl", redirectUrl);
+      }
+
       // Call the server action from lib/actions.ts
       const result = await handleLogin(formData);
       
