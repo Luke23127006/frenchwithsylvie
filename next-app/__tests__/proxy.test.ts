@@ -1,4 +1,4 @@
-import { middleware } from '../middleware';
+import { proxy } from '../proxy';
 import { NextResponse, NextRequest } from 'next/server';
 import { verifyToken } from '../lib/auth';
 
@@ -39,7 +39,7 @@ describe('Middleware Route Protection', () => {
   it('Case 1: Request to protected route with NO auth_token cookie -> Should redirect to /login', async () => {
     const req = createMockRequest('/dashboard');
     
-    await middleware(req);
+    await proxy(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/login?redirect=%2Fdashboard', 'http://localhost:3000/dashboard'));
     expect(NextResponse.next).not.toHaveBeenCalled();
@@ -53,7 +53,7 @@ describe('Middleware Route Protection', () => {
     const mockResponse = { cookies: { delete: mockDelete } };
     (NextResponse.redirect as jest.Mock).mockReturnValue(mockResponse);
 
-    await middleware(req);
+    await proxy(req);
 
     expect(verifyToken).toHaveBeenCalledWith('invalid.token');
     expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/login?redirect=%2Fdashboard', 'http://localhost:3000/dashboard'));
@@ -65,7 +65,7 @@ describe('Middleware Route Protection', () => {
     const req = createMockRequest('/dashboard', 'valid.token');
     (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'teacher' });
 
-    await middleware(req);
+    await proxy(req);
 
     expect(verifyToken).toHaveBeenCalledWith('valid.token');
     expect(NextResponse.next).toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe('Middleware Route Protection', () => {
     const req = createMockRequest('/student', 'valid.token');
     (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'student' });
 
-    await middleware(req);
+    await proxy(req);
 
     expect(NextResponse.next).toHaveBeenCalled();
     expect(NextResponse.redirect).not.toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('Middleware Route Protection', () => {
     const req = createMockRequest('/dashboard', 'valid.token');
     (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'student' });
 
-    await middleware(req);
+    await proxy(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/student', 'http://localhost:3000/dashboard'));
     expect(NextResponse.next).not.toHaveBeenCalled();
@@ -96,7 +96,7 @@ describe('Middleware Route Protection', () => {
     const req = createMockRequest('/student', 'valid.token');
     (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'teacher' });
 
-    await middleware(req);
+    await proxy(req);
 
     expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/dashboard', 'http://localhost:3000/student'));
     expect(NextResponse.next).not.toHaveBeenCalled();
@@ -105,7 +105,7 @@ describe('Middleware Route Protection', () => {
   it('Case 7: Public route like /login -> Should bypass auth logic', async () => {
     const req = createMockRequest('/login');
 
-    await middleware(req);
+    await proxy(req);
 
     expect(req.cookies.get).not.toHaveBeenCalled();
     expect(verifyToken).not.toHaveBeenCalled();
