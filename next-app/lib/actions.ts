@@ -313,6 +313,34 @@ export async function gradeSubmission(submissionId: string, grade: string, feedb
   }
 }
 
+// NEW: 13. Update Assignment Title
+export async function updateAssignmentTitle(assignmentId: string, title: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { data, error } = await supabase
+      .from("assignments")
+      .update({ title })
+      .eq("id", assignmentId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath(`/dashboard/assignment/${assignmentId}`);
+    revalidatePath(`/dashboard`);
+    return { data };
+  } catch (error: any) {
+    console.error("Error in updateAssignmentTitle:", error);
+    return { error: error.message };
+  }
+}
+
 // NEW: 13. Get Student Submission
 export async function getStudentSubmission(assignmentId: string) {
   try {

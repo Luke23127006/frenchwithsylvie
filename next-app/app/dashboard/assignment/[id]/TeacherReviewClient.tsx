@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import Link from "next/link";
-import { updateAssignees, gradeSubmission } from "@/lib/actions";
+import { updateAssignees, gradeSubmission, updateAssignmentTitle } from "@/lib/actions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { getRatingInfo } from "@/lib/utils";
 
@@ -138,6 +138,34 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
     s.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Edit Title State
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState(assignmentData.title);
+  const [currentTitle, setCurrentTitle] = useState(assignmentData.title);
+
+  const handleSaveTitle = () => {
+    if (!titleInput.trim() || titleInput.trim() === currentTitle) {
+      setIsEditingTitle(false);
+      setTitleInput(currentTitle);
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await updateAssignmentTitle(assignmentData.id, titleInput.trim());
+        if (result.error) {
+          toast.error("Failed to update title: " + result.error);
+        } else {
+          toast.success("Title updated successfully!");
+          setCurrentTitle(titleInput.trim());
+          setIsEditingTitle(false);
+        }
+      } catch (e: any) {
+        toast.error("Error: " + e.message);
+      }
+    });
+  };
+
   return (
     <div className="container mx-auto max-w-7xl p-4 md:p-8 space-y-6">
       <div className="flex justify-between items-center">
@@ -148,7 +176,30 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{assignmentData.title}</h1>
+            {isEditingTitle ? (
+              <div className="flex items-center space-x-2">
+                <Input 
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  className="text-2xl font-bold h-auto py-1"
+                  autoFocus
+                  disabled={isPending}
+                />
+                <Button size="icon" variant="ghost" onClick={handleSaveTitle} disabled={isPending}>
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => { setIsEditingTitle(false); setTitleInput(currentTitle); }} disabled={isPending}>
+                  <X className="h-5 w-5 text-red-600" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 group">
+                <h1 className="text-3xl font-bold tracking-tight">{currentTitle}</h1>
+                <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setIsEditingTitle(true)}>
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            )}
             <p className="text-muted-foreground">
               Created on {new Date(assignmentData.created_at).toLocaleDateString()}
             </p>

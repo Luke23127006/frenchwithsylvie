@@ -127,14 +127,23 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                   <p className="text-green-700">
                     Thank you! Your work has been sent to the teacher.
                   </p>
-                  <Button variant="outline" className="mt-4" onClick={() => {
-                    // Allow resubmitting by clearing state
-                    setIsSubmitted(false);
-                    setFile(null);
-                    setSubmission(null);
-                  }}>
-                    Resubmit File
-                  </Button>
+                  <div className="flex justify-center space-x-4 mt-4">
+                    <Button variant="outline" onClick={() => {
+                      // Allow resubmitting by clearing state
+                      setIsSubmitted(false);
+                      setFile(null);
+                      setSubmission(null);
+                    }}>
+                      Resubmit File
+                    </Button>
+                    {submission?.file_url && (
+                      <Button variant="secondary" asChild>
+                        <a href={submission.file_url} target="_blank" rel="noopener noreferrer">
+                          Open Submitted File
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
