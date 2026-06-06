@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { logout } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
+import ChangePasswordModal from "./ChangePasswordModal";
 
 export default async function Header() {
   const cookieStore = await cookies();
@@ -23,11 +24,14 @@ export default async function Header() {
             <p className="font-medium leading-none">{payload.full_name as string}</p>
             <p className="text-muted-foreground capitalize mt-1 text-xs">{payload.role as string}</p>
           </div>
-          <form action={logout}>
-            <Button variant="outline" size="sm" type="submit">
-              Logout
-            </Button>
-          </form>
+          <div className="flex items-center gap-2">
+            <ChangePasswordModal />
+            <form action={logout}>
+              <Button variant="outline" size="sm" type="submit">
+                Logout
+              </Button>
+            </form>
+          </div>
         </div>
       </div>
     </header>

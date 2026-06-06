@@ -453,3 +453,53 @@ export async function logout() {
   cookieStore.delete("auth_token");
   redirect("/login");
 }
+
+// NEW: 16. Change Password
+export async function changePassword(oldPassword: string, newPassword: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload) return { error: "Unauthorized" };
+
+    if (!oldPassword || !newPassword) {
+      return { error: "Old password and new password are required" };
+    }
+
+    if (newPassword.length < 6) {
+      return { error: "New password must be at least 6 characters" };
+    }
+
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", payload.id)
+      .single();
+
+    if (error || !user) {
+      return { error: "User not found" };
+    }
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!isPasswordValid) {
+      return { error: "Incorrect old password" };
+    }
+
+    const saltRounds = 10;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ password_hash: newPasswordHash })
+      .eq("id", payload.id);
+
+    if (updateError) throw updateError;
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in changePassword:", error);
+    return { error: error.message };
+  }
+}

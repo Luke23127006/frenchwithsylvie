@@ -1,4 +1,4 @@
-import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission, updateAssignmentTitle, removeSubmission } from '../lib/actions';
+import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission, updateAssignmentTitle, removeSubmission, changePassword } from '../lib/actions';
 import { supabase } from '../lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -30,6 +30,7 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
+  hash: jest.fn(),
 }));
 
 jest.mock('../lib/auth', () => ({
@@ -204,6 +205,47 @@ describe('Server Actions', () => {
       expect(eqMock1).toHaveBeenCalledWith('id', 'sub-1');
       expect(eqMock2).toHaveBeenCalledWith('student_id', 'student-1');
       expect(revalidatePath).toHaveBeenCalledWith('/assignment/a1');
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('changePassword', () => {
+    it('should update password hash if old password is correct', async () => {
+      const mockCookieGet = jest.fn().mockReturnValue({ value: 'valid.token' });
+      (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
+      (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1' });
+
+      // Mock fetching user
+      const singleMockUser = jest.fn().mockResolvedValue({ data: { id: 'user-1', password_hash: 'old_hash' }, error: null });
+      const eqMockUser = jest.fn().mockReturnValue({ single: singleMockUser });
+      const selectMockUser = jest.fn().mockReturnValue({ eq: eqMockUser });
+      const fromMockUser = jest.fn().mockReturnValue({ select: selectMockUser });
+      
+      // Mock updating user
+      const eqMockUpdate = jest.fn().mockResolvedValue({ error: null });
+      const updateMock = jest.fn().mockReturnValue({ eq: eqMockUpdate });
+      const fromMockUpdate = jest.fn().mockReturnValue({ update: updateMock });
+
+      (supabase.from as jest.Mock).mockImplementation((table) => {
+        if (table === 'users') {
+          // We need a way to differentiate select vs update in this simple mock
+          return { select: selectMockUser, update: updateMock };
+        }
+      });
+
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new_hash');
+
+      const formData = new FormData();
+      formData.append('oldPassword', 'old_pass');
+      formData.append('newPassword', 'new_pass');
+      
+      // We modified changePassword to take 2 strings directly, not formData. Let's fix the test call.
+      const result = await changePassword('old_pass', 'new_pass');
+
+      expect(bcrypt.compare).toHaveBeenCalledWith('old_pass', 'old_hash');
+      expect(bcrypt.hash).toHaveBeenCalledWith('new_pass', 10);
+      expect(updateMock).toHaveBeenCalledWith({ password_hash: 'new_hash' });
       expect(result.success).toBe(true);
     });
   });
