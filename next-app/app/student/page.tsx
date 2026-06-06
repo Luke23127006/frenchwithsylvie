@@ -2,6 +2,8 @@ import { getAssignments } from "@/lib/actions";
 import StudentDashboardClient from "./StudentDashboardClient";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 export default async function StudentDashboardPage() {
   const { data: assignments, error } = await getAssignments();
 
