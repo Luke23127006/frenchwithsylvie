@@ -154,9 +154,9 @@ describe('Server Actions', () => {
       expect(cookies).not.toHaveBeenCalled();
     });
 
-    it('should handle valid credentials by setting a cookie and redirecting', async () => {
+    it('should handle valid teacher credentials by setting a cookie and redirecting to /dashboard', async () => {
       const singleMock = jest.fn().mockResolvedValue({ 
-        data: { id: 'u1', username: 'user1', password_hash: 'hash' }, 
+        data: { id: 'u1', username: 'user1', full_name: 'User One', password_hash: 'hash', role: 'teacher' }, 
         error: null 
       });
       const eqMock = jest.fn().mockReturnValue({ single: singleMock });
@@ -175,7 +175,7 @@ describe('Server Actions', () => {
 
       await handleLogin(formData);
 
-      expect(signToken).toHaveBeenCalledWith({ id: 'u1', username: 'user1' });
+      expect(signToken).toHaveBeenCalledWith({ id: 'u1', username: 'user1', full_name: 'User One', role: 'teacher' });
       expect(cookies).toHaveBeenCalled();
       expect(setCookieMock).toHaveBeenCalledWith(
         'auth_token', 
@@ -183,6 +183,31 @@ describe('Server Actions', () => {
         expect.objectContaining({ httpOnly: true, maxAge: 86400 })
       );
       expect(redirect).toHaveBeenCalledWith('/dashboard');
+    });
+
+    it('should handle valid student credentials by setting a cookie and redirecting to /student', async () => {
+      const singleMock = jest.fn().mockResolvedValue({ 
+        data: { id: 'u2', username: 'user2', full_name: 'User Two', password_hash: 'hash', role: 'student' }, 
+        error: null 
+      });
+      const eqMock = jest.fn().mockReturnValue({ single: singleMock });
+      const selectMock = jest.fn().mockReturnValue({ eq: eqMock });
+      (supabase.from as jest.Mock).mockReturnValue({ select: selectMock });
+
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (signToken as jest.Mock).mockResolvedValue('mock.jwt.token');
+
+      const setCookieMock = jest.fn();
+      (cookies as jest.Mock).mockResolvedValue({ set: setCookieMock }); 
+
+      const formData = new FormData();
+      formData.append('username', 'user2');
+      formData.append('password', 'correctpass');
+
+      await handleLogin(formData);
+
+      expect(signToken).toHaveBeenCalledWith({ id: 'u2', username: 'user2', full_name: 'User Two', role: 'student' });
+      expect(redirect).toHaveBeenCalledWith('/student');
     });
   });
 

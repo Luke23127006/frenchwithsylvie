@@ -76,16 +76,9 @@ export default function DashboardClient({ assignments }: DashboardClientProps) {
 
   return (
     <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
-      <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
-          <p className="text-muted-foreground">Manage your assignments and view student submissions.</p>
-        </div>
-        <form action={logout}>
-          <Button variant="outline" type="submit">
-            Logout
-          </Button>
-        </form>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
+        <p className="text-muted-foreground">Manage your assignments and view student submissions.</p>
       </div>
 
       <div className="grid gap-8">

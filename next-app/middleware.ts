@@ -3,8 +3,14 @@ import type { NextRequest } from 'next/server';
 import { verifyToken } from './lib/auth';
 
 export async function middleware(request: NextRequest) {
-  // Only protect /dashboard routes (defensive check alongside the matcher)
-  if (!request.nextUrl.pathname.startsWith('/dashboard')) {
+  const pathname = request.nextUrl.pathname;
+  
+  // Protect /dashboard, /student, and /assignment routes
+  const isProtectedRoute = pathname.startsWith('/dashboard') || 
+                           pathname.startsWith('/student') || 
+                           pathname.startsWith('/assignment');
+
+  if (!isProtectedRoute) {
     return NextResponse.next();
   }
 
@@ -25,11 +31,25 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Allow the request to proceed if token is valid
+  const role = payload.role as string;
+
+  // RBAC Checks
+  if (role === 'student' && pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/student', request.url));
+  }
+
+  if (role === 'teacher' && (pathname.startsWith('/student') || pathname.startsWith('/assignment'))) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  // Allow the request to proceed if token and role are valid
   return NextResponse.next();
 }
 
-// Ensure the middleware only runs for /dashboard and its sub-routes
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: [
+    '/dashboard/:path*',
+    '/student/:path*',
+    '/assignment/:path*'
+  ],
 };

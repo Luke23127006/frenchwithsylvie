@@ -36,7 +36,7 @@ describe('Middleware Route Protection', () => {
     return req;
   };
 
-  it('Case 1: Request to /dashboard with NO auth_token cookie -> Should call NextResponse.redirect to /login', async () => {
+  it('Case 1: Request to protected route with NO auth_token cookie -> Should redirect to /login', async () => {
     const req = createMockRequest('/dashboard');
     
     await middleware(req);
@@ -45,7 +45,7 @@ describe('Middleware Route Protection', () => {
     expect(NextResponse.next).not.toHaveBeenCalled();
   });
 
-  it('Case 2: Request to /dashboard with an INVALID auth_token -> Should call NextResponse.redirect to /login', async () => {
+  it('Case 2: Request to protected route with INVALID auth_token -> Should redirect to /login', async () => {
     const req = createMockRequest('/dashboard', 'invalid.token');
     (verifyToken as jest.Mock).mockResolvedValue(null);
 
@@ -61,9 +61,9 @@ describe('Middleware Route Protection', () => {
     expect(NextResponse.next).not.toHaveBeenCalled();
   });
 
-  it('Case 3: Request to /dashboard with a VALID auth_token -> Should call NextResponse.next()', async () => {
+  it('Case 3: Teacher requests /dashboard -> Should call NextResponse.next()', async () => {
     const req = createMockRequest('/dashboard', 'valid.token');
-    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1' });
+    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'teacher' });
 
     await middleware(req);
 
@@ -72,12 +72,41 @@ describe('Middleware Route Protection', () => {
     expect(NextResponse.redirect).not.toHaveBeenCalled();
   });
 
-  it('Case 4: Request to a public route like /assignment/123 -> Should bypass auth logic and call NextResponse.next()', async () => {
-    const req = createMockRequest('/assignment/123');
+  it('Case 4: Student requests /student -> Should call NextResponse.next()', async () => {
+    const req = createMockRequest('/student', 'valid.token');
+    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'student' });
 
     await middleware(req);
 
-    // Should not check cookies or verify token for non-dashboard routes
+    expect(NextResponse.next).toHaveBeenCalled();
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+  });
+
+  it('Case 5: Student requests /dashboard -> Should redirect to /student', async () => {
+    const req = createMockRequest('/dashboard', 'valid.token');
+    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'student' });
+
+    await middleware(req);
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/student', 'http://localhost:3000/dashboard'));
+    expect(NextResponse.next).not.toHaveBeenCalled();
+  });
+
+  it('Case 6: Teacher requests /student -> Should redirect to /dashboard', async () => {
+    const req = createMockRequest('/student', 'valid.token');
+    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'teacher' });
+
+    await middleware(req);
+
+    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/dashboard', 'http://localhost:3000/student'));
+    expect(NextResponse.next).not.toHaveBeenCalled();
+  });
+
+  it('Case 7: Public route like /login -> Should bypass auth logic', async () => {
+    const req = createMockRequest('/login');
+
+    await middleware(req);
+
     expect(req.cookies.get).not.toHaveBeenCalled();
     expect(verifyToken).not.toHaveBeenCalled();
     expect(NextResponse.next).toHaveBeenCalled();

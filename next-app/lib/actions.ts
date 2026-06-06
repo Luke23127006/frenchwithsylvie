@@ -159,6 +159,7 @@ export async function getSubmissionsByAssignment(assignmentId: string) {
 
 // 7. Login
 export async function handleLogin(formData: FormData) {
+  let redirectUrl = "";
   try {
     const username = formData.get("username") as string;
     const passwordString = formData.get("password") as string;
@@ -183,10 +184,11 @@ export async function handleLogin(formData: FormData) {
       return { error: "Invalid username or password" };
     }
 
-    // Create a JWT token
     const token = await signToken({
       id: user.id,
       username: user.username,
+      full_name: user.full_name,
+      role: user.role,
     });
 
     // Set HTTP-only cookie using next/headers
@@ -199,13 +201,17 @@ export async function handleLogin(formData: FormData) {
       maxAge: 60 * 60 * 24, // 1 day
     });
 
+    redirectUrl = user.role === "student" ? "/student" : "/dashboard";
+
   } catch (error: any) {
     console.error("Error in login:", error);
     return { error: error.message || "An unexpected error occurred" };
   }
 
   // Redirect must be outside the try-catch block because it throws an error internally in Next.js
-  redirect("/dashboard");
+  if (redirectUrl) {
+    redirect(redirectUrl);
+  }
 }
 
 // 8. Logout
