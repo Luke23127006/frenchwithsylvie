@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Upload, CheckCircle2, GraduationCap } from "lucide-react";
+import { Upload, CheckCircle2, GraduationCap, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +28,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [isSubmitted, setIsSubmitted] = useState(!!existingSubmission);
   const [submission, setSubmission] = useState(existingSubmission);
   const [file, setFile] = useState<File | null>(null);
+  const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -97,12 +98,42 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       {/* Left/Top Area: Document Viewer (60%) */}
       <div className="w-full md:w-[60%] border-r bg-white p-4 md:p-8 flex flex-col h-[50vh] md:h-screen">
-        <h1 className="text-2xl font-bold mb-4">{assignment.title}</h1>
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex flex-col gap-3">
+            <h1 className="text-2xl font-bold">{assignment.title}</h1>
+            {isSubmitted && submission?.file_url && (
+              <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
+                <Button 
+                  variant={viewMode === "assignment" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("assignment")}
+                  className="rounded-md"
+                >
+                  Assignment
+                </Button>
+                <Button 
+                  variant={viewMode === "submission" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("submission")}
+                  className="rounded-md"
+                >
+                  My Submission
+                </Button>
+              </div>
+            )}
+          </div>
+          <Button variant="outline" asChild>
+            <a href={viewMode === "assignment" ? assignment.file_url : submission.file_url} target="_blank" rel="noopener noreferrer">
+              <FileText className="mr-2 h-4 w-4 text-blue-600" />
+              View Full Document
+            </a>
+          </Button>
+        </div>
         <div className="flex-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative">
           <iframe 
-            src={assignment.file_url} 
+            src={viewMode === "assignment" ? assignment.file_url : submission.file_url} 
             className="absolute inset-0 w-full h-full"
-            title={assignment.title}
+            title={viewMode === "assignment" ? assignment.title : "My Submission"}
           />
         </div>
       </div>
@@ -160,13 +191,6 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                       <Trash2 className="w-4 h-4 mr-2" />
                       {isPending ? "Removing..." : "Remove Submission"}
                     </Button>
-                    {submission?.file_url && (
-                      <Button variant="secondary" asChild>
-                        <a href={submission.file_url} target="_blank" rel="noopener noreferrer">
-                          Open Submitted File
-                        </a>
-                      </Button>
-                    )}
                   </div>
                 </CardContent>
               </Card>

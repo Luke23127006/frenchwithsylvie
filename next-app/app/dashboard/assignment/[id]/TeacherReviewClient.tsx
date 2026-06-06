@@ -235,7 +235,14 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
           </div>
         </div>
         
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <a href={assignmentData.file_url} target="_blank" rel="noopener noreferrer">
+              <FileText className="mr-2 h-4 w-4 text-blue-600" />
+              View Document
+            </a>
+          </Button>
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">Edit Assignees</Button>
           </DialogTrigger>
@@ -291,6 +298,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative items-start">
