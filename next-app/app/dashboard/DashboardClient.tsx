@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Copy, Plus, FileText, Search } from "lucide-react";
+import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createAssignment, uploadFile } from "@/lib/actions";
+import { createAssignment, uploadFile, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions";
 import {
   Card,
   CardContent,
@@ -35,13 +35,15 @@ interface Student {
 interface DashboardClientProps {
   assignments: any[];
   students: Student[];
+  trashedAssignments?: any[];
 }
 
-export default function DashboardClient({ assignments, students }: DashboardClientProps) {
+export default function DashboardClient({ assignments, students, trashedAssignments = [] }: DashboardClientProps) {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
   const [isPending, startTransition] = useTransition();
 
   const handleStudentToggle = (studentId: string) => {
@@ -111,6 +113,40 @@ export default function DashboardClient({ assignments, students }: DashboardClie
     s.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleHide = (id: string, isHidden: boolean) => {
+    startTransition(async () => {
+      const result = await toggleHideAssignment(id, isHidden);
+      if (result.error) toast.error(result.error);
+      else toast.success(isHidden ? "Assignment hidden from students." : "Assignment is now visible.");
+    });
+  };
+
+  const handleTrash = (id: string) => {
+    if (!window.confirm("Move this assignment to the trash? It will be hidden from students.")) return;
+    startTransition(async () => {
+      const result = await moveToTrash(id);
+      if (result.error) toast.error(result.error);
+      else toast.success("Assignment moved to trash.");
+    });
+  };
+
+  const handleRestore = (id: string) => {
+    startTransition(async () => {
+      const result = await restoreAssignment(id);
+      if (result.error) toast.error(result.error);
+      else toast.success("Assignment restored.");
+    });
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Are you sure you want to completely delete this assignment and all its student submissions? This action cannot be undone.")) return;
+    startTransition(async () => {
+      const result = await permanentlyDeleteAssignment(id);
+      if (result.error) toast.error(result.error);
+      else toast.success("Assignment permanently deleted.");
+    });
+  };
 
   return (
     <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
@@ -214,12 +250,30 @@ export default function DashboardClient({ assignments, students }: DashboardClie
 
         {/* Assignments List Section */}
         <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Recent Assignments</CardTitle>
-            <CardDescription>A list of all your created assignments.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle>Assignments</CardTitle>
+              <CardDescription>Manage your created assignments.</CardDescription>
+            </div>
+            <div className="flex space-x-2">
+              <Button 
+                variant={activeTab === "active" ? "default" : "outline"} 
+                size="sm" 
+                onClick={() => setActiveTab("active")}
+              >
+                Active
+              </Button>
+              <Button 
+                variant={activeTab === "trash" ? "default" : "outline"} 
+                size="sm" 
+                onClick={() => setActiveTab("trash")}
+              >
+                Trash
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
+            <div className="rounded-md border mt-4">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -230,17 +284,43 @@ export default function DashboardClient({ assignments, students }: DashboardClie
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {assignments.map((assignment) => (
+                  {activeTab === "active" && assignments.map((assignment) => (
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center">
                           <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                          {assignment.title}
+                          <span className={assignment.is_hidden ? "text-muted-foreground" : ""}>
+                            {assignment.title}
+                          </span>
+                          {assignment.is_hidden && (
+                            <span className="ml-2 text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                              Hidden
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>{new Date(assignment.created_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-center">{assignment.submissions_count || 0}</TableCell>
                       <TableCell className="text-right space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          title={assignment.is_hidden ? "Unhide" : "Hide from students"}
+                          onClick={() => handleHide(assignment.id, !assignment.is_hidden)}
+                          disabled={isPending}
+                        >
+                          {assignment.is_hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="text-destructive"
+                          title="Move to Trash"
+                          onClick={() => handleTrash(assignment.id)}
+                          disabled={isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -254,10 +334,51 @@ export default function DashboardClient({ assignments, students }: DashboardClie
                       </TableCell>
                     </TableRow>
                   ))}
-                  {assignments.length === 0 && (
+                  
+                  {activeTab === "trash" && trashedAssignments.map((assignment) => (
+                    <TableRow key={assignment.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center text-muted-foreground">
+                          <FileText className="mr-2 h-4 w-4" />
+                          <span className="line-through">{assignment.title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        Deleted: {new Date(assignment.deleted_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-center text-muted-foreground">{assignment.submissions_count || 0}</TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleRestore(assignment.id)}
+                          disabled={isPending}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" /> Restore
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => handleDelete(assignment.id)}
+                          disabled={isPending}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete Permanently
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+
+                  {activeTab === "active" && assignments.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="h-24 text-center">
-                        No assignments found.
+                        No active assignments found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {activeTab === "trash" && trashedAssignments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                        Trash is empty.
                       </TableCell>
                     </TableRow>
                   )}

@@ -97,6 +97,8 @@ export async function getAssignments() {
           submissions (count)
         `)
         .eq('assignment_assignees.student_id', payload.id)
+        .is('deleted_at', null)
+        .eq('is_hidden', false)
         .order('created_at', { ascending: false });
         
       if (error) throw error;
@@ -112,6 +114,7 @@ export async function getAssignments() {
           *,
           submissions (count)
         `)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -388,6 +391,135 @@ export async function removeSubmission(submissionId: string, assignmentId: strin
     return { success: true };
   } catch (error: any) {
     console.error("Error in removeSubmission:", error);
+    return { error: error.message };
+  }
+}
+
+// NEW: 17. Toggle Hide Assignment
+export async function toggleHideAssignment(assignmentId: string, isHidden: boolean) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { error } = await supabase
+      .from("assignments")
+      .update({ is_hidden: isHidden })
+      .eq("id", assignmentId);
+
+    if (error) throw error;
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// NEW: 18. Move to Trash
+export async function moveToTrash(assignmentId: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { error } = await supabase
+      .from("assignments")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", assignmentId);
+
+    if (error) throw error;
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// NEW: 19. Restore Assignment
+export async function restoreAssignment(assignmentId: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { error } = await supabase
+      .from("assignments")
+      .update({ deleted_at: null })
+      .eq("id", assignmentId);
+
+    if (error) throw error;
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// NEW: 20. Permanently Delete Assignment
+export async function permanentlyDeleteAssignment(assignmentId: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { error } = await supabase
+      .from("assignments")
+      .delete()
+      .eq("id", assignmentId);
+
+    if (error) throw error;
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// NEW: 21. Get Trashed Assignments
+export async function getTrashedAssignments() {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
+
+    const { data, error } = await supabase
+      .from("assignments")
+      .select(`
+        *,
+        submissions (count)
+      `)
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false });
+
+    if (error) throw error;
+
+    const formattedData = data.map((assignment: any) => ({
+      ...assignment,
+      submissions_count: assignment.submissions?.[0]?.count || 0
+    }));
+
+    return { data: formattedData };
+  } catch (error: any) {
+    console.error("Error fetching trashed assignments:", error);
     return { error: error.message };
   }
 }
