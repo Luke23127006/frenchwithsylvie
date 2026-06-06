@@ -1,4 +1,4 @@
-import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission, updateAssignmentTitle, removeSubmission, changePassword } from '../lib/actions';
+import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission, updateAssignmentTitle, removeSubmission, changePassword, uploadFile } from '../lib/actions';
 import { supabase } from '../lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -107,16 +107,19 @@ describe('Server Actions', () => {
       (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
       (verifyToken as jest.Mock).mockResolvedValue({ id: 'stu-1', role: 'student' });
 
-      const orderMock = jest.fn().mockResolvedValue({ data: [], error: null });
-      const eqMock = jest.fn().mockReturnValue({ order: orderMock });
-      const selectMock = jest.fn().mockReturnValue({ eq: eqMock });
-      (supabase.from as jest.Mock).mockReturnValue({ select: selectMock });
+      const chainMock = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        order: jest.fn().mockResolvedValue({ data: [], error: null })
+      };
+      (supabase.from as jest.Mock).mockReturnValue(chainMock);
 
       await getAssignments();
 
       expect(supabase.from).toHaveBeenCalledWith('assignments');
-      expect(selectMock).toHaveBeenCalledWith(expect.stringContaining('assignment_assignees!inner(student_id)'));
-      expect(eqMock).toHaveBeenCalledWith('assignment_assignees.student_id', 'stu-1');
+      expect(chainMock.select).toHaveBeenCalledWith(expect.stringContaining('assignment_assignees!inner(student_id)'));
+      expect(chainMock.eq).toHaveBeenCalledWith('assignment_assignees.student_id', 'stu-1');
     });
 
     it('should return all assignments for teachers', async () => {
@@ -124,14 +127,18 @@ describe('Server Actions', () => {
       (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
       (verifyToken as jest.Mock).mockResolvedValue({ id: 'teacher-1', role: 'teacher' });
 
-      const orderMock = jest.fn().mockResolvedValue({ data: [], error: null });
-      const selectMock = jest.fn().mockReturnValue({ order: orderMock });
-      (supabase.from as jest.Mock).mockReturnValue({ select: selectMock });
+      const chainMock = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        is: jest.fn().mockReturnThis(),
+        order: jest.fn().mockResolvedValue({ data: [], error: null })
+      };
+      (supabase.from as jest.Mock).mockReturnValue(chainMock);
 
       await getAssignments();
 
       expect(supabase.from).toHaveBeenCalledWith('assignments');
-      expect(selectMock).toHaveBeenCalledWith(expect.not.stringContaining('assignment_assignees!inner'));
+      expect(chainMock.select).toHaveBeenCalledWith(expect.not.stringContaining('assignment_assignees!inner'));
     });
   });
 
@@ -247,6 +254,37 @@ describe('Server Actions', () => {
       expect(bcrypt.hash).toHaveBeenCalledWith('new_pass', 10);
       expect(updateMock).toHaveBeenCalledWith({ password_hash: 'new_hash' });
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('uploadFile', () => {
+    it('should handle large file uploads (> 1MB) without action error', async () => {
+      const mockCookieGet = jest.fn().mockReturnValue({ value: 'valid.token' });
+      (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
+      (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1' });
+
+      // Mock supabase storage upload
+      const getPublicUrlMock = jest.fn().mockReturnValue({ data: { publicUrl: 'http://large-file-url.pdf' } });
+      const uploadMock = jest.fn().mockResolvedValue({ data: { path: 'path' }, error: null });
+      
+      (supabase.storage.from as jest.Mock).mockReturnValue({
+        upload: uploadMock,
+        getPublicUrl: getPublicUrlMock,
+      });
+
+      // Create a dummy large file (e.g. 2MB)
+      const largeBuffer = new ArrayBuffer(2 * 1024 * 1024);
+      const largeFile = new File([largeBuffer], 'large.pdf', { type: 'application/pdf' });
+      
+      const formData = new FormData();
+      formData.append('file', largeFile);
+
+      const result = await uploadFile(formData, 'assignments');
+
+      expect(supabase.storage.from).toHaveBeenCalledWith('assignments');
+      expect(uploadMock).toHaveBeenCalled();
+      expect(result.url).toBe('http://large-file-url.pdf');
+      expect(result.error).toBeUndefined();
     });
   });
 });

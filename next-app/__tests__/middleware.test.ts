@@ -41,7 +41,7 @@ describe('Middleware Route Protection', () => {
     
     await middleware(req);
 
-    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/login', 'http://localhost:3000/dashboard'));
+    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/login?redirect=%2Fdashboard', 'http://localhost:3000/dashboard'));
     expect(NextResponse.next).not.toHaveBeenCalled();
   });
 
@@ -56,7 +56,7 @@ describe('Middleware Route Protection', () => {
     await middleware(req);
 
     expect(verifyToken).toHaveBeenCalledWith('invalid.token');
-    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/login', 'http://localhost:3000/dashboard'));
+    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/login?redirect=%2Fdashboard', 'http://localhost:3000/dashboard'));
     expect(mockDelete).toHaveBeenCalledWith('auth_token');
     expect(NextResponse.next).not.toHaveBeenCalled();
   });

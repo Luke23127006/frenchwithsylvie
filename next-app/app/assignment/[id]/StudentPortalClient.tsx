@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import DOMPurify from "isomorphic-dompurify";
 import { getRatingInfo } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
+import { convertImagesToPDF } from "@/lib/pdf";
 
 interface StudentPortalClientProps {
   assignment: any;
@@ -27,21 +28,34 @@ interface StudentPortalClientProps {
 export default function StudentPortalClient({ assignment, existingSubmission }: StudentPortalClientProps) {
   const [isSubmitted, setIsSubmitted] = useState(!!existingSubmission);
   const [submission, setSubmission] = useState(existingSubmission);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [isConverting, setIsConverting] = useState(false);
   const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
+    if (files.length === 0) {
       toast.error("Please provide a solution file.");
       return;
     }
 
     startTransition(async () => {
       try {
+        let finalFile: File;
+
+        if (files.length === 1 && files[0].type === 'application/pdf') {
+          // If it's a single PDF, use it directly
+          finalFile = files[0];
+        } else {
+          // It's one or more images, convert to PDF
+          setIsConverting(true);
+          finalFile = await convertImagesToPDF(files);
+          setIsConverting(false);
+        }
+
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append("file", finalFile);
         
         const uploadResult = await uploadFile(formData, "submissions");
         if (uploadResult.error) {
@@ -80,7 +94,8 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
 
         setSubmission(null);
         setIsSubmitted(false);
-        setFile(null);
+        setFiles([]);
+        setViewMode("assignment");
         toast.success("Submission removed successfully.");
       } catch (error: any) {
         toast.error(`Error: ${error.message}`);
@@ -123,7 +138,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
             )}
           </div>
           <Button variant="outline" asChild>
-            <a href={viewMode === "assignment" ? assignment.file_url : submission.file_url} target="_blank" rel="noopener noreferrer">
+            <a href={viewMode === "assignment" ? assignment.file_url : submission?.file_url} target="_blank" rel="noopener noreferrer">
               <FileText className="mr-2 h-4 w-4 text-blue-600" />
               View Full Document
             </a>
@@ -131,7 +146,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
         </div>
         <div className="flex-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative">
           <iframe 
-            src={viewMode === "assignment" ? assignment.file_url : submission.file_url} 
+            src={viewMode === "assignment" ? assignment.file_url : submission?.file_url} 
             className="absolute inset-0 w-full h-full"
             title={viewMode === "assignment" ? assignment.title : "My Submission"}
           />
@@ -152,20 +167,26 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="solutionFile">Your Solution (PDF/Image)</Label>
+                    <Label htmlFor="solutionFile">Your Solution (PDF or Multiple Images)</Label>
                     <Input 
                       id="solutionFile" 
                       type="file" 
-                      accept=".pdf,image/*" 
-                      onChange={(e) => setFile(e.target.files?.[0] || null)}
-                      disabled={isPending}
+                      multiple
+                      accept=".pdf,image/png,image/jpeg,image/jpg" 
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.files || []);
+                        setFiles(selected);
+                      }}
+                      disabled={isPending || isConverting}
                       required 
                       className="cursor-pointer"
                     />
                   </div>
                   <div className="flex w-full gap-4">
-                    <Button type="submit" className="w-full text-lg h-12" disabled={isPending}>
-                      {isPending ? (
+                    <Button type="submit" className="w-full text-lg h-12" disabled={isPending || isConverting}>
+                      {isConverting ? (
+                        "Converting images to PDF..."
+                      ) : isPending ? (
                         "Uploading..."
                       ) : (
                         <><Upload className="mr-2 h-5 w-5" /> Submit</>
