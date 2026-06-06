@@ -287,7 +287,7 @@ export async function updateAssignees(assignmentId: string, newAssigneeIds: stri
 }
 
 // NEW: 12. Grade Submission
-export async function gradeSubmission(submissionId: string, grade: string, feedback: string) {
+export async function gradeSubmission(submissionId: string, grade: string | null, feedback: string | null) {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
@@ -362,6 +362,32 @@ export async function getStudentSubmission(assignmentId: string) {
     return { data };
   } catch (error: any) {
     console.error("Error in getStudentSubmission:", error);
+    return { error: error.message };
+  }
+}
+
+// NEW: 15. Remove Student Submission
+export async function removeSubmission(submissionId: string, assignmentId: string) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'student') return { error: "Unauthorized" };
+
+    const { error } = await supabase
+      .from("submissions")
+      .delete()
+      .eq("id", submissionId)
+      .eq("student_id", payload.id); // Ensure they own it
+
+    if (error) throw error;
+
+    revalidatePath(`/assignment/${assignmentId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in removeSubmission:", error);
     return { error: error.message };
   }
 }

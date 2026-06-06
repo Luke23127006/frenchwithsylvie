@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save, Pencil, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save, Pencil, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -132,7 +132,36 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
       }
     });
   };
+  const handleRemoveGrade = () => {
+    if (!selectedAssignee || !selectedAssignee.submission) return;
 
+    if (!window.confirm("Are you sure you want to remove the grade and feedback for this submission?")) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await gradeSubmission(selectedAssignee.submission.id, null, null);
+        if (result.error) {
+          toast.error("Failed to remove grade: " + result.error);
+        } else {
+          toast.success("Grade and feedback removed successfully!");
+          setGrade("");
+          setFeedback("");
+          setSelectedAssignee({
+            ...selectedAssignee,
+            submission: {
+              ...selectedAssignee.submission,
+              grade: null,
+              feedback: null
+            }
+          });
+        }
+      } catch (e: any) {
+        toast.error("Error: " + e.message);
+      }
+    });
+  };
   const filteredStudents = allStudents.filter(s => 
     s.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -405,7 +434,12 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                     />
                   </div>
                 </div>
-                <div className="mt-4 flex justify-end">
+                <div className="mt-4 flex justify-end space-x-2">
+                  {(selectedAssignee?.submission?.grade || selectedAssignee?.submission?.feedback) && (
+                    <Button variant="destructive" onClick={handleRemoveGrade} disabled={isPending}>
+                      <Trash2 className="mr-2 h-4 w-4" /> {isPending ? "Removing..." : "Remove Grade"}
+                    </Button>
+                  )}
                   <Button onClick={handleSaveGrade} disabled={isPending}>
                     <Save className="mr-2 h-4 w-4" /> {isPending ? "Saving..." : "Save Grade"}
                   </Button>

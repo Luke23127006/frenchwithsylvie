@@ -1,4 +1,4 @@
-import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission } from '../lib/actions';
+import { createAssignment, submitSolution, getAssignments, handleLogin, logout, getAllStudents, updateAssignees, getAssignmentDetailsForTeacher, gradeSubmission, getStudentSubmission, updateAssignmentTitle, removeSubmission } from '../lib/actions';
 import { supabase } from '../lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
@@ -183,6 +183,28 @@ describe('Server Actions', () => {
       expect(eqMock1).toHaveBeenCalledWith('assignment_id', 'a1');
       expect(eqMock2).toHaveBeenCalledWith('student_id', 'student-1');
       expect(result.data).toEqual({ id: 'sub-1' });
+    });
+  });
+
+  describe('removeSubmission', () => {
+    it('should delete submission and revalidate when student is authenticated', async () => {
+      const mockCookieGet = jest.fn().mockReturnValue({ value: 'valid.token' });
+      (cookies as jest.Mock).mockResolvedValue({ get: mockCookieGet });
+      (verifyToken as jest.Mock).mockResolvedValue({ id: 'student-1', role: 'student' });
+
+      const eqMock2 = jest.fn().mockResolvedValue({ error: null });
+      const eqMock1 = jest.fn().mockReturnValue({ eq: eqMock2 });
+      const deleteMock = jest.fn().mockReturnValue({ eq: eqMock1 });
+      (supabase.from as jest.Mock).mockReturnValue({ delete: deleteMock });
+
+      const result = await removeSubmission('sub-1', 'a1');
+
+      expect(supabase.from).toHaveBeenCalledWith('submissions');
+      expect(deleteMock).toHaveBeenCalled();
+      expect(eqMock1).toHaveBeenCalledWith('id', 'sub-1');
+      expect(eqMock2).toHaveBeenCalledWith('student_id', 'student-1');
+      expect(revalidatePath).toHaveBeenCalledWith('/assignment/a1');
+      expect(result.success).toBe(true);
     });
   });
 });

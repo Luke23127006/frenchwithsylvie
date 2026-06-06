@@ -13,10 +13,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { uploadFile, submitSolution } from "@/lib/actions";
+import { uploadFile, submitSolution, removeSubmission } from "@/lib/actions";
 import { toast } from "sonner";
-import DOMPurify from "dompurify";
+import DOMPurify from "isomorphic-dompurify";
 import { getRatingInfo } from "@/lib/utils";
+import { Trash2 } from "lucide-react";
 
 interface StudentPortalClientProps {
   assignment: any;
@@ -55,6 +56,31 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
 
         setSubmission(submitResult.data?.[0]);
         setIsSubmitted(true);
+      } catch (error: any) {
+        toast.error(`Error: ${error.message}`);
+      }
+    });
+  };
+
+  const handleRemove = () => {
+    if (!submission) return;
+    
+    if (!window.confirm("Are you sure you want to remove your submission? This action cannot be undone.")) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await removeSubmission(submission.id, assignment.id);
+        if (result.error) {
+          toast.error(`Removal failed: ${result.error}`);
+          return;
+        }
+
+        setSubmission(null);
+        setIsSubmitted(false);
+        setFile(null);
+        toast.success("Submission removed successfully.");
       } catch (error: any) {
         toast.error(`Error: ${error.message}`);
       }
@@ -106,13 +132,15 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                       className="cursor-pointer"
                     />
                   </div>
-                  <Button type="submit" className="w-full text-lg h-12" disabled={isPending}>
-                    {isPending ? (
-                      "Uploading..."
-                    ) : (
-                      <><Upload className="mr-2 h-5 w-5" /> Submit Assignment</>
-                    )}
-                  </Button>
+                  <div className="flex w-full gap-4">
+                    <Button type="submit" className="w-full text-lg h-12" disabled={isPending}>
+                      {isPending ? (
+                        "Uploading..."
+                      ) : (
+                        <><Upload className="mr-2 h-5 w-5" /> Submit</>
+                      )}
+                    </Button>
+                  </div>
                 </form>
               </CardContent>
             </Card>
@@ -128,13 +156,9 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                     Thank you! Your work has been sent to the teacher.
                   </p>
                   <div className="flex justify-center space-x-4 mt-4">
-                    <Button variant="outline" onClick={() => {
-                      // Allow resubmitting by clearing state
-                      setIsSubmitted(false);
-                      setFile(null);
-                      setSubmission(null);
-                    }}>
-                      Resubmit File
+                    <Button variant="destructive" disabled={isPending} onClick={handleRemove}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      {isPending ? "Removing..." : "Remove Submission"}
                     </Button>
                     {submission?.file_url && (
                       <Button variant="secondary" asChild>
