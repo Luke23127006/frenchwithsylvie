@@ -19,6 +19,7 @@ import DOMPurify from "isomorphic-dompurify";
 import { getRatingInfo } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import { convertImagesToPDF } from "@/lib/pdf";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface StudentPortalClientProps {
   assignment: any;
@@ -33,7 +34,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [isPending, startTransition] = useTransition();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, type: 'pdf' | 'images') => {
     e.preventDefault();
     if (files.length === 0) {
       toast.error("Please provide a solution file.");
@@ -44,11 +45,19 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
       try {
         let finalFile: File;
 
-        if (files.length === 1 && files[0].type === 'application/pdf') {
-          // If it's a single PDF, use it directly
+        if (type === 'pdf') {
+          if (files[0].type !== 'application/pdf') {
+            toast.error("Please select a valid PDF file.");
+            return;
+          }
           finalFile = files[0];
         } else {
           // It's one or more images, convert to PDF
+          const hasNonImage = files.some(f => !f.type.startsWith('image/'));
+          if (hasNonImage) {
+            toast.error("Please select only image files.");
+            return;
+          }
           setIsConverting(true);
           finalFile = await convertImagesToPDF(files);
           setIsConverting(false);
@@ -165,35 +174,73 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="solutionFile">Your Solution (PDF or Multiple Images)</Label>
-                    <Input 
-                      id="solutionFile" 
-                      type="file" 
-                      multiple
-                      accept=".pdf,image/png,image/jpeg,image/jpg" 
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.files || []);
-                        setFiles(selected);
-                      }}
-                      disabled={isPending || isConverting}
-                      required 
-                      className="cursor-pointer"
-                    />
-                  </div>
-                  <div className="flex w-full gap-4">
-                    <Button type="submit" className="w-full text-lg h-12" disabled={isPending || isConverting}>
-                      {isConverting ? (
-                        "Converting images to PDF..."
-                      ) : isPending ? (
-                        "Uploading..."
-                      ) : (
-                        <><Upload className="mr-2 h-5 w-5" /> Submit</>
-                      )}
-                    </Button>
-                  </div>
-                </form>
+                <Tabs defaultValue="pdf" className="w-full" onValueChange={() => setFiles([])}>
+                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                    <TabsTrigger value="pdf">Submit PDF</TabsTrigger>
+                    <TabsTrigger value="images">Submit Images</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="pdf">
+                    <form onSubmit={(e) => handleSubmit(e, 'pdf')} className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="solutionFilePdf">Your Solution (Single PDF)</Label>
+                        <Input 
+                          id="solutionFilePdf" 
+                          type="file" 
+                          accept=".pdf" 
+                          onChange={(e) => {
+                            const selected = Array.from(e.target.files || []);
+                            setFiles(selected);
+                          }}
+                          disabled={isPending || isConverting}
+                          required 
+                          className="cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex w-full gap-4">
+                        <Button type="submit" className="w-full text-lg h-12" disabled={isPending || isConverting}>
+                          {isPending ? (
+                            "Uploading..."
+                          ) : (
+                            <><Upload className="mr-2 h-5 w-5" /> Submit</>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </TabsContent>
+                  
+                  <TabsContent value="images">
+                    <form onSubmit={(e) => handleSubmit(e, 'images')} className="space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="solutionFileImages">Your Solution (Multiple Images)</Label>
+                        <Input 
+                          id="solutionFileImages" 
+                          type="file" 
+                          multiple
+                          accept="image/png,image/jpeg,image/jpg" 
+                          onChange={(e) => {
+                            const selected = Array.from(e.target.files || []);
+                            setFiles(selected);
+                          }}
+                          disabled={isPending || isConverting}
+                          required 
+                          className="cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex w-full gap-4">
+                        <Button type="submit" className="w-full text-lg h-12" disabled={isPending || isConverting}>
+                          {isConverting ? (
+                            "Converting images to PDF..."
+                          ) : isPending ? (
+                            "Uploading..."
+                          ) : (
+                            <><Upload className="mr-2 h-5 w-5" /> Submit</>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           ) : (
