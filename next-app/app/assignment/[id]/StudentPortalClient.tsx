@@ -21,14 +21,13 @@ interface StudentPortalClientProps {
 
 export default function StudentPortalClient({ assignment }: StudentPortalClientProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [studentName, setStudentName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentName || !file) {
-      toast.error("Please provide both your name and a solution file.");
+    if (!file) {
+      toast.error("Please provide a solution file.");
       return;
     }
 
@@ -43,7 +42,7 @@ export default function StudentPortalClient({ assignment }: StudentPortalClientP
           return;
         }
 
-        const submitResult = await submitSolution(assignment.id, studentName, uploadResult.url!);
+        const submitResult = await submitSolution(assignment.id, uploadResult.url!);
         if (submitResult.error) {
           toast.error(`Submission failed: ${submitResult.error}`);
           return;
@@ -84,17 +83,6 @@ export default function StudentPortalClient({ assignment }: StudentPortalClientP
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input 
-                      id="fullName" 
-                      placeholder="e.g. John Doe" 
-                      value={studentName}
-                      onChange={(e) => setStudentName(e.target.value)}
-                      disabled={isPending}
-                      required 
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="solutionFile">Your Solution (PDF/Image)</Label>
                     <Input 
                       id="solutionFile" 
@@ -124,12 +112,11 @@ export default function StudentPortalClient({ assignment }: StudentPortalClientP
                 </div>
                 <CardTitle className="text-2xl text-green-800">Submitted Successfully!</CardTitle>
                 <p className="text-green-700">
-                  Thank you, <strong>{studentName}</strong>. Your work has been sent to the teacher.
+                  Thank you! Your work has been sent to the teacher.
                 </p>
                 <Button variant="outline" className="mt-4" onClick={() => {
                   setIsSubmitted(false);
                   setFile(null);
-                  setStudentName("");
                 }}>
                   Submit Another File
                 </Button>

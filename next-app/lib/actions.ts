@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { supabase } from "./supabase";
 import bcrypt from "bcryptjs";
-import { signToken } from "./auth";
+import { signToken, verifyToken } from "./auth";
 
 // 1. Upload File
 export async function uploadFile(formData: FormData, bucketName: string) {
@@ -39,50 +39,88 @@ export async function uploadFile(formData: FormData, bucketName: string) {
   }
 }
 
-// 2. Create Assignment
-export async function createAssignment(title: string, fileUrl: string) {
+// 2. Create Assignment (Modified to accept assignees)
+export async function createAssignment(title: string, fileUrl: string, assigneeIds: string[]) {
   try {
-    const { data, error } = await supabase
+    const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
       .insert([{ title, file_url: fileUrl }])
       .select();
 
-    if (error) {
-      console.error("Error creating assignment:", error);
-      return { error: error.message };
+    if (assignmentError) {
+      console.error("Error creating assignment:", assignmentError);
+      return { error: assignmentError.message };
+    }
+
+    const assignmentId = assignmentData[0].id;
+    
+    if (assigneeIds && assigneeIds.length > 0) {
+      const assigneesToInsert = assigneeIds.map(id => ({
+        assignment_id: assignmentId,
+        student_id: id
+      }));
+      
+      const { error: assigneesError } = await supabase
+        .from("assignment_assignees")
+        .insert(assigneesToInsert);
+        
+      if (assigneesError) {
+        console.error("Error adding assignees:", assigneesError);
+        return { error: assigneesError.message };
+      }
     }
 
     revalidatePath("/dashboard");
-    return { data };
+    return { data: assignmentData };
   } catch (error: any) {
     console.error("Error in createAssignment:", error);
     return { error: error.message || "An unexpected error occurred" };
   }
 }
 
-// 3. Get Assignments
+// 3. Get Assignments (Filtered by role)
 export async function getAssignments() {
   try {
-    const { data, error } = await supabase
-      .from("assignments")
-      .select(`
-        *,
-        submissions (count)
-      `)
-      .order('created_at', { ascending: false });
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload) return { error: "Invalid token" };
 
-    if (error) {
-      console.error("Error fetching assignments:", error);
-      return { error: error.message };
+    if (payload.role === 'student') {
+      const { data, error } = await supabase
+        .from("assignments")
+        .select(`
+          *,
+          assignment_assignees!inner(student_id),
+          submissions (count)
+        `)
+        .eq('assignment_assignees.student_id', payload.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      const formattedData = data.map((assignment: any) => ({
+        ...assignment,
+        submissions_count: assignment.submissions?.[0]?.count || 0
+      }));
+      return { data: formattedData };
+    } else {
+      const { data, error } = await supabase
+        .from("assignments")
+        .select(`
+          *,
+          submissions (count)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      const formattedData = data.map((assignment: any) => ({
+        ...assignment,
+        submissions_count: assignment.submissions?.[0]?.count || 0
+      }));
+      return { data: formattedData };
     }
-
-    // Format the data to easily access the submissions count
-    const formattedData = data.map((assignment: any) => ({
-      ...assignment,
-      submissions_count: assignment.submissions?.[0]?.count || 0
-    }));
-
-    return { data: formattedData };
   } catch (error: any) {
     console.error("Error in getAssignments:", error);
     return { error: error.message || "An unexpected error occurred" };
@@ -110,24 +148,28 @@ export async function getAssignmentById(id: string) {
   }
 }
 
-// 5. Submit Solution
-export async function submitSolution(assignmentId: string, studentName: string, fileUrl: string) {
+// 5. Submit Solution (Auto extract student from token)
+export async function submitSolution(assignmentId: string, fileUrl: string) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload || payload.role !== 'student') return { error: "Unauthorized" };
+
     const { data, error } = await supabase
       .from("submissions")
       .insert([{ 
         assignment_id: assignmentId, 
-        student_name: studentName, 
+        student_id: payload.id,
+        student_name: payload.full_name,
         file_url: fileUrl 
       }])
       .select();
 
-    if (error) {
-      console.error("Error submitting solution:", error);
-      return { error: error.message };
-    }
+    if (error) throw error;
 
-    // Revalidate the teacher's dashboard view for this specific assignment
     revalidatePath(`/dashboard/assignment/${assignmentId}`);
     return { data };
   } catch (error: any) {
@@ -136,7 +178,7 @@ export async function submitSolution(assignmentId: string, studentName: string, 
   }
 }
 
-// 6. Get Submissions By Assignment
+// 6. Get Submissions By Assignment (Deprecated/Replaced by getAssignmentDetailsForTeacher)
 export async function getSubmissionsByAssignment(assignmentId: string) {
   try {
     const { data, error } = await supabase
@@ -154,6 +196,93 @@ export async function getSubmissionsByAssignment(assignmentId: string) {
   } catch (error: any) {
     console.error("Error in getSubmissionsByAssignment:", error);
     return { error: error.message || "An unexpected error occurred" };
+  }
+}
+
+// NEW: 9. Get All Students
+export async function getAllStudents() {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, username')
+      .eq('role', 'student');
+      
+    if (error) throw error;
+    return { data };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// NEW: 10. Get Assignment Details For Teacher
+export async function getAssignmentDetailsForTeacher(assignmentId: string) {
+  try {
+    const { data: assignment, error: assignmentError } = await supabase
+      .from("assignments")
+      .select("*")
+      .eq("id", assignmentId)
+      .single();
+
+    if (assignmentError) throw assignmentError;
+
+    const { data: assigneesData, error: assigneesError } = await supabase
+      .from("assignment_assignees")
+      .select(`
+        student_id,
+        users ( full_name, username )
+      `)
+      .eq("assignment_id", assignmentId);
+
+    if (assigneesError) throw assigneesError;
+
+    const { data: submissionsData, error: submissionsError } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("assignment_id", assignmentId);
+
+    if (submissionsError) throw submissionsError;
+
+    const assignees = assigneesData.map((a: any) => {
+      const submission = submissionsData.find((s: any) => s.student_id === a.student_id);
+      return {
+        id: a.student_id,
+        full_name: a.users.full_name,
+        username: a.users.username,
+        has_submitted: !!submission,
+        submission: submission || null
+      };
+    });
+
+    return { 
+      data: {
+        ...assignment,
+        assignees
+      }
+    };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
+
+// NEW: 11. Update Assignees
+export async function updateAssignees(assignmentId: string, newAssigneeIds: string[]) {
+  try {
+    const { error: deleteError } = await supabase.from("assignment_assignees").delete().eq("assignment_id", assignmentId);
+    if (deleteError) throw deleteError;
+
+    if (newAssigneeIds && newAssigneeIds.length > 0) {
+      const assigneesToInsert = newAssigneeIds.map(id => ({
+        assignment_id: assignmentId,
+        student_id: id
+      }));
+      const { error: insertError } = await supabase.from("assignment_assignees").insert(assigneesToInsert);
+      if (insertError) throw insertError;
+    }
+    
+    revalidatePath(`/dashboard/assignment/${assignmentId}`);
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
   }
 }
 
@@ -191,7 +320,6 @@ export async function handleLogin(formData: FormData) {
       role: user.role,
     });
 
-    // Set HTTP-only cookie using next/headers
     const cookieStore = await cookies();
     cookieStore.set("auth_token", token, {
       httpOnly: true,
@@ -208,7 +336,6 @@ export async function handleLogin(formData: FormData) {
     return { error: error.message || "An unexpected error occurred" };
   }
 
-  // Redirect must be outside the try-catch block because it throws an error internally in Next.js
   if (redirectUrl) {
     redirect(redirectUrl);
   }

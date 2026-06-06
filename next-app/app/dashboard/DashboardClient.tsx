@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Copy, Plus, FileText } from "lucide-react";
+import { Copy, Plus, FileText, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { logout, createAssignment, uploadFile } from "@/lib/actions";
+import { createAssignment, uploadFile } from "@/lib/actions";
 import {
   Card,
   CardContent,
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -24,19 +26,49 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 
-interface DashboardClientProps {
-  assignments: any[];
+interface Student {
+  id: string;
+  full_name: string;
+  username: string;
 }
 
-export default function DashboardClient({ assignments }: DashboardClientProps) {
+interface DashboardClientProps {
+  assignments: any[];
+  students: Student[];
+}
+
+export default function DashboardClient({ assignments, students }: DashboardClientProps) {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  const handleStudentToggle = (studentId: string) => {
+    setSelectedStudents((prev) => 
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedStudents.length === students.length) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(students.map(s => s.id));
+    }
+  };
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !file) {
       toast.error("Please provide both a title and a file.");
+      return;
+    }
+    
+    if (selectedStudents.length === 0) {
+      toast.error("Please select at least one student to assign.");
       return;
     }
 
@@ -51,7 +83,7 @@ export default function DashboardClient({ assignments }: DashboardClientProps) {
           return;
         }
 
-        const createResult = await createAssignment(title, uploadResult.url!);
+        const createResult = await createAssignment(title, uploadResult.url!, selectedStudents);
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
           return;
@@ -60,6 +92,7 @@ export default function DashboardClient({ assignments }: DashboardClientProps) {
         toast.success("Assignment created successfully!");
         setTitle("");
         setFile(null);
+        setSelectedStudents([]);
         const fileInput = document.getElementById('document') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
 
@@ -74,6 +107,11 @@ export default function DashboardClient({ assignments }: DashboardClientProps) {
     toast.success("Assignment link copied to clipboard!");
   };
 
+  const filteredStudents = students.filter(s => 
+    s.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
       <div className="mb-6">
@@ -81,9 +119,9 @@ export default function DashboardClient({ assignments }: DashboardClientProps) {
         <p className="text-muted-foreground">Manage your assignments and view student submissions.</p>
       </div>
 
-      <div className="grid gap-8">
+      <div className="grid gap-8 md:grid-cols-[1fr_350px]">
         {/* Create Assignment Section */}
-        <Card>
+        <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle>Create New Assignment</CardTitle>
             <CardDescription>Upload a new PDF or image document for your students.</CardDescription>
@@ -119,8 +157,63 @@ export default function DashboardClient({ assignments }: DashboardClientProps) {
           </CardContent>
         </Card>
 
+        {/* Assignees Selection Section */}
+        <Card className="md:col-span-1">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Assign Students</CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+                {selectedStudents.length === students.length ? "Deselect All" : "Select All"}
+              </Button>
+            </div>
+            <CardDescription>Select who should receive this assignment.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search students..."
+                  className="pl-8"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <ScrollArea className="h-[200px] border rounded-md p-4">
+                {filteredStudents.length > 0 ? (
+                  <div className="space-y-4">
+                    {filteredStudents.map((student) => (
+                      <div key={student.id} className="flex items-center space-x-2">
+                        <Checkbox 
+                          id={`student-${student.id}`} 
+                          checked={selectedStudents.includes(student.id)}
+                          onCheckedChange={() => handleStudentToggle(student.id)}
+                        />
+                        <label 
+                          htmlFor={`student-${student.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {student.full_name} <span className="text-muted-foreground font-normal">(@{student.username})</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-sm text-muted-foreground mt-8">
+                    No students found.
+                  </div>
+                )}
+              </ScrollArea>
+              <div className="text-sm text-muted-foreground text-right">
+                {selectedStudents.length} selected
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Assignments List Section */}
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Recent Assignments</CardTitle>
             <CardDescription>A list of all your created assignments.</CardDescription>

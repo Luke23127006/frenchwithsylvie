@@ -1,4 +1,4 @@
-import { getAssignments } from "@/lib/actions";
+import { getAssignments, getAllStudents } from "@/lib/actions";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -13,5 +13,7 @@ export default async function DashboardPage() {
     );
   }
 
-  return <DashboardClient assignments={assignments || []} />;
+  const { data: students } = await getAllStudents();
+
+  return <DashboardClient assignments={assignments || []} students={students || []} />;
 }
