@@ -1,8 +1,19 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import Image from "next/image"
+import { cookies } from "next/headers"
+import { verifyToken } from "@/lib/auth"
 
-export default function Page() {
+export default async function Page() {
+  const cookieStore = await cookies()
+  const token = cookieStore.get("auth_token")?.value
+  
+  let isAuthenticated = false
+  if (token) {
+    const payload = await verifyToken(token)
+    if (payload) isAuthenticated = true
+  }
+
   return (
     <div className="flex min-h-svh items-center justify-center bg-slate-50 p-6 pb-32">
       <div className="flex flex-col items-center text-center space-y-6 max-w-3xl w-full">
@@ -26,11 +37,19 @@ export default function Page() {
         </p>
         
         <div className="pt-4">
-          <Button asChild size="lg" className="px-8 text-lg rounded-full">
-            <Link href="/login">
-              Log In to Your Account
-            </Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button asChild size="lg" className="px-8 text-lg rounded-full">
+              <Link href="/dashboard">
+                Go to Dashboard
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild size="lg" className="px-8 text-lg rounded-full">
+              <Link href="/login">
+                Log In to Your Account
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
     </div>

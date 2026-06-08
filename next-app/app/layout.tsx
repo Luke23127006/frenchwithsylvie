@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils";
 import Header from "@/components/Header";
+import HeaderWrapper from "@/components/HeaderWrapper";
 
 export const metadata: Metadata = {
   title: 'French with Sylvie',
@@ -35,7 +36,9 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <Header />
+          <HeaderWrapper>
+            <Header />
+          </HeaderWrapper>
           {children}
         </ThemeProvider>
       </body>
