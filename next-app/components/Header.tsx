@@ -3,6 +3,8 @@ import { verifyToken } from "@/lib/auth";
 import { logout } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import ChangePasswordModal from "./ChangePasswordModal";
+import Image from "next/image";
+import Link from "next/link";
 
 export default async function Header() {
   const cookieStore = await cookies();
@@ -16,9 +18,10 @@ export default async function Header() {
   return (
     <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <Image src="/logo.jpg" alt="French with Sylvie Logo" width={32} height={32} className="rounded-full shadow-sm" />
           <span className="font-bold text-xl text-primary">French with Sylvie</span>
-        </div>
+        </Link>
         <div className="flex items-center gap-4">
           <div className="text-sm text-right hidden md:block">
             <p className="font-medium leading-none">{payload.full_name as string}</p>

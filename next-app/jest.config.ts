@@ -1,12 +1,17 @@
 import type { Config } from 'jest';
+import nextJest from 'next/jest.js';
 
-const config: Config = {
+const createJestConfig = nextJest({
+  dir: './',
+});
+
+const customJestConfig: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   setupFiles: ['dotenv/config'],
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
   },
 };
 
-export default config;
+export default createJestConfig(customJestConfig);
