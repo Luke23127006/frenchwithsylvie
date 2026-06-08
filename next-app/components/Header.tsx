@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import ChangePasswordModal from "./ChangePasswordModal";
 import Image from "next/image";
 import Link from "next/link";
+import { User } from "lucide-react";
 
 export default async function Header() {
   const cookieStore = await cookies();
@@ -23,9 +24,14 @@ export default async function Header() {
           <span className="font-bold text-xl text-primary">French with Sylvie</span>
         </Link>
         <div className="flex items-center gap-4">
-          <div className="text-sm text-right hidden md:block">
-            <p className="font-medium leading-none">{payload.full_name as string}</p>
-            <p className="text-muted-foreground capitalize mt-1 text-xs">{payload.role as string}</p>
+          <div className="hidden md:flex items-center gap-3 mr-2">
+            <div className="text-right">
+              <p className="font-semibold text-base leading-none text-foreground">{payload.full_name as string}</p>
+              <p className="text-muted-foreground capitalize mt-1 text-sm">{payload.role as string}</p>
+            </div>
+            <div className="bg-primary/10 p-2 rounded-full">
+              <User className="w-5 h-5 text-primary" />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <ChangePasswordModal />
