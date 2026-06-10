@@ -112,4 +112,26 @@ describe('Middleware Route Protection', () => {
     expect(NextResponse.next).toHaveBeenCalled();
     expect(NextResponse.redirect).not.toHaveBeenCalled();
   });
+
+  it("Case 8: User with 'PENDING' state is redirected to '/onboarding'", async () => {
+    const req = createMockRequest('/dashboard', 'valid.token');
+    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'teacher', state: 'PENDING' });
+
+    await proxy(req);
+
+    expect(verifyToken).toHaveBeenCalledWith('valid.token');
+    expect(NextResponse.redirect).toHaveBeenCalledWith(new URL('/onboarding', 'http://localhost:3000/dashboard'));
+    expect(NextResponse.next).not.toHaveBeenCalled();
+  });
+
+  it("Case 9: User with 'COMPLETED' state is allowed to access '/dashboard'", async () => {
+    const req = createMockRequest('/dashboard', 'valid.token');
+    (verifyToken as jest.Mock).mockResolvedValue({ id: 'user-1', role: 'teacher', state: 'COMPLETED' });
+
+    await proxy(req);
+
+    expect(verifyToken).toHaveBeenCalledWith('valid.token');
+    expect(NextResponse.next).toHaveBeenCalled();
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+  });
 });

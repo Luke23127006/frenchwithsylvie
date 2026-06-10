@@ -36,6 +36,15 @@ export async function proxy(request: NextRequest) {
   }
 
   const role = payload.role as string;
+  const state = payload.state as string | undefined;
+
+  // Onboarding Check
+  if (state === 'PENDING') {
+    // Only redirect if not already on /onboarding
+    if (!pathname.startsWith('/onboarding')) {
+      return NextResponse.redirect(new URL('/onboarding', request.url));
+    }
+  }
 
   // RBAC Checks
   if (role === 'student' && pathname.startsWith('/dashboard')) {
