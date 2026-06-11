@@ -7,7 +7,7 @@ import MockAssignmentCard from "./MockAssignmentCard";
 import OnboardingChecklist from "./OnboardingChecklist";
 import OnboardingSpotlight from "./OnboardingSpotlight";
 import { Input } from "@/components/ui/input";
-import { updateOnboardingStatus } from "@/lib/mockApi";
+import { updateOnboardingState } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 
 export default function OnboardingTutorial() {
@@ -52,7 +52,7 @@ export default function OnboardingTutorial() {
         origin: { y: 0.6 }
       });
       // Update the real backend
-      updateOnboardingStatus('COMPLETED').catch(console.error);
+      updateOnboardingState().catch(console.error);
     }, 500);
   };
 

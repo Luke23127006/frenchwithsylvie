@@ -584,6 +584,7 @@ export async function handleLogin(formData: FormData) {
       username: user.username,
       full_name: user.full_name,
       role: user.role,
+      state: user.state,
     });
 
     const cookieStore = await cookies();
@@ -662,6 +663,44 @@ export async function changePassword(oldPassword: string, newPassword: string) {
     return { success: true };
   } catch (error: any) {
     console.error("Error in changePassword:", error);
+    return { error: error.message };
+  }
+}
+
+// NEW: 22. Update Onboarding State
+export async function updateOnboardingState() {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return { error: "Not authenticated" };
+    
+    const payload = await verifyToken(token);
+    if (!payload) return { error: "Unauthorized" };
+
+    const { error } = await supabase
+      .from("users")
+      .update({ state: 'COMPLETED' })
+      .eq("id", payload.id);
+
+    if (error) throw error;
+
+    // Issue a new token with updated state
+    const newToken = await signToken({
+      ...payload,
+      state: 'COMPLETED',
+    });
+
+    cookieStore.set("auth_token", newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24, // 1 day
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error in updateOnboardingState:", error);
     return { error: error.message };
   }
 }
