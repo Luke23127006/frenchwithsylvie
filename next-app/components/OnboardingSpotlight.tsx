@@ -77,7 +77,10 @@ export default function OnboardingSpotlight({
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={onNextStep}
+              onClick={() => {
+                localStorage.setItem("password_status", "skipped");
+                onNextStep();
+              }}
             >
               I'll change later
             </Button>

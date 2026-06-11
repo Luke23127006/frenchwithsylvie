@@ -46,6 +46,7 @@ export default function ChangePasswordModal({ onSuccess }: { onSuccess?: () => v
         toast.error(`Error: ${result.error}`);
       } else {
         toast.success("Password changed successfully!");
+        localStorage.setItem("password_status", "completed");
         setIsOpen(false);
         setOldPassword("");
         setNewPassword("");
