@@ -14,9 +14,10 @@ export default function OnboardingSpotlight({
 }: OnboardingSpotlightProps) {
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    if (isActive) {
+    if (isActive && !isUpdating) {
       const element = document.getElementById("change-password-btn");
       if (element) {
         setTargetElement(element);
@@ -46,9 +47,9 @@ export default function OnboardingSpotlight({
         };
       }
     }
-  }, [isActive]);
+  }, [isActive, isUpdating]);
 
-  if (!isActive) return null;
+  if (!isActive || isUpdating) return null;
 
   return (
     <>
@@ -86,7 +87,10 @@ export default function OnboardingSpotlight({
             </Button>
             <Button 
               size="sm" 
-              onClick={() => targetElement.click()}
+              onClick={() => {
+                targetElement.click();
+                setIsUpdating(true);
+              }}
             >
               Update Now
             </Button>

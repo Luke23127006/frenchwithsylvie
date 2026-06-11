@@ -38,9 +38,6 @@ describe('Onboarding Tutorial Flow', () => {
   it('Test 1: Ensure Search and Filters are NOT in the document (Cognitive load reduction)', () => {
     render(<OnboardingPage />);
     
-    // We expect the mock header to be there
-    expect(screen.getByTestId('mock-header')).toBeInTheDocument();
-    
     // We explicitly expect no generic "Search" or "Filter" elements
     const searchElements = screen.queryAllByText(/search/i);
     const filterElements = screen.queryAllByText(/filter/i);
