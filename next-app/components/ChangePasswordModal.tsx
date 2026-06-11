@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { changePassword } from "@/lib/actions";
 
-export default function ChangePasswordModal() {
+export default function ChangePasswordModal({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -50,6 +50,7 @@ export default function ChangePasswordModal() {
         setOldPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        onSuccess?.();
       }
     });
   };
@@ -57,7 +58,7 @@ export default function ChangePasswordModal() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" id="change-password-btn">
           Change Password
         </Button>
       </DialogTrigger>
