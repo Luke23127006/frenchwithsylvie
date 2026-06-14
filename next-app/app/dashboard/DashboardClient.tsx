@@ -41,6 +41,7 @@ interface DashboardClientProps {
 export default function DashboardClient({ assignments, students, trashedAssignments = [] }: DashboardClientProps) {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [audioFiles, setAudioFiles] = useState<File[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
@@ -64,8 +65,8 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !file) {
-      toast.error("Please provide both a title and a file.");
+    if (!title || (!file && audioFiles.length === 0)) {
+      toast.error("Please provide a title and at least one document or audio file.");
       return;
     }
     
@@ -76,16 +77,35 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
     startTransition(async () => {
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        
-        const uploadResult = await uploadFile(formData, "assignments");
-        if (uploadResult.error) {
-          toast.error(`Upload failed: ${uploadResult.error}`);
-          return;
+        let fileUrl: string | null = null;
+        if (file) {
+          const formData = new FormData();
+          formData.append("file", file);
+          
+          const uploadResult = await uploadFile(formData, "assignments");
+          if (uploadResult.error) {
+            toast.error(`Document upload failed: ${uploadResult.error}`);
+            return;
+          }
+          fileUrl = uploadResult.url!;
         }
 
-        const createResult = await createAssignment(title, uploadResult.url!, selectedStudents);
+        const audioUrls: string[] = [];
+        for (const audio of audioFiles) {
+          const formData = new FormData();
+          formData.append("file", audio);
+          
+          const uploadResult = await uploadFile(formData, "assignments");
+          if (uploadResult.error) {
+            toast.error(`Audio upload failed: ${uploadResult.error}`);
+            return;
+          }
+          if (uploadResult.url) {
+            audioUrls.push(uploadResult.url);
+          }
+        }
+
+        const createResult = await createAssignment(title, fileUrl, audioUrls, selectedStudents);
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
           return;
@@ -94,9 +114,12 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         toast.success("Assignment created successfully!");
         setTitle("");
         setFile(null);
+        setAudioFiles([]);
         setSelectedStudents([]);
         const fileInput = document.getElementById('document') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
+        const audioInput = document.getElementById('audio') as HTMLInputElement;
+        if (audioInput) audioInput.value = '';
 
       } catch (error: any) {
         toast.error(`Error: ${error.message}`);
@@ -176,14 +199,24 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="document">Document (PDF/Image)</Label>
+                <Label htmlFor="document">Document (PDF/Image) - Optional if audio provided</Label>
                 <Input 
                   id="document" 
                   type="file" 
                   accept=".pdf,image/*"
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
                   disabled={isPending}
-                  required 
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="audio">Audio Files (Listening Homework)</Label>
+                <Input 
+                  id="audio" 
+                  type="file" 
+                  multiple
+                  accept="audio/*"
+                  onChange={(e) => setAudioFiles(Array.from(e.target.files || []))}
+                  disabled={isPending}
                 />
               </div>
               <Button type="submit" className="w-full md:w-auto" disabled={isPending}>

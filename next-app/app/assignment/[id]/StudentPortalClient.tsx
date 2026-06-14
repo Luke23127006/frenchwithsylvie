@@ -286,19 +286,42 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
               </div>
             )}
           </div>
-          <Button variant="outline" asChild>
-            <a href={viewMode === "assignment" ? assignment.file_url : submission?.file_url} target="_blank" rel="noopener noreferrer">
-              <FileText className="mr-2 h-4 w-4 text-blue-600" />
-              View Full Document
-            </a>
-          </Button>
+          {(viewMode === "assignment" ? assignment.file_url : submission?.file_url) && (
+            <Button variant="outline" asChild>
+              <a href={viewMode === "assignment" ? assignment.file_url : submission?.file_url} target="_blank" rel="noopener noreferrer">
+                <FileText className="mr-2 h-4 w-4 text-blue-600" />
+                View Full Document
+              </a>
+            </Button>
+          )}
         </div>
+
+        {viewMode === "assignment" && assignment.audio_urls && assignment.audio_urls.length > 0 && (
+          <div className="mb-4 space-y-3">
+            <h3 className="font-semibold text-slate-700">Listening Audio</h3>
+            <div className="flex flex-col gap-2">
+              {assignment.audio_urls.map((audioUrl: string, index: number) => (
+                <audio key={index} controls className="w-full h-10" src={audioUrl}>
+                  Your browser does not support the audio element.
+                </audio>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative">
-          <iframe 
-            src={viewMode === "assignment" ? assignment.file_url : submission?.file_url} 
-            className="absolute inset-0 w-full h-full"
-            title={viewMode === "assignment" ? assignment.title : "My Submission"}
-          />
+          {(viewMode === "assignment" ? assignment.file_url : submission?.file_url) ? (
+            <iframe 
+              src={viewMode === "assignment" ? assignment.file_url : submission?.file_url} 
+              className="absolute inset-0 w-full h-full"
+              title={viewMode === "assignment" ? assignment.title : "My Submission"}
+            />
+          ) : (
+            <div className="text-muted-foreground flex flex-col items-center p-8 text-center">
+              <FileText className="h-16 w-16 mb-4 opacity-20" />
+              <p>No document provided for this assignment.</p>
+            </div>
+          )}
         </div>
       </div>
 

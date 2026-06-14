@@ -44,7 +44,8 @@ interface TeacherReviewClientProps {
   assignmentData: {
     id: string;
     title: string;
-    file_url: string;
+    file_url: string | null;
+    audio_urls?: string[];
     created_at: string;
     assignees: Assignee[];
   };
@@ -236,12 +237,14 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <a href={assignmentData.file_url} target="_blank" rel="noopener noreferrer">
-              <FileText className="mr-2 h-4 w-4 text-blue-600" />
-              View Document
-            </a>
-          </Button>
+          {assignmentData.file_url && (
+            <Button variant="outline" asChild>
+              <a href={assignmentData.file_url} target="_blank" rel="noopener noreferrer">
+                <FileText className="mr-2 h-4 w-4 text-blue-600" />
+                View Document
+              </a>
+            </Button>
+          )}
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">Edit Assignees</Button>
@@ -300,6 +303,23 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
         </Dialog>
         </div>
       </div>
+
+      {assignmentData.audio_urls && assignmentData.audio_urls.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Listening Audio</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3">
+              {assignmentData.audio_urls.map((audioUrl: string, index: number) => (
+                <audio key={index} controls className="w-full h-10" src={audioUrl}>
+                  Your browser does not support the audio element.
+                </audio>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 relative items-start">
         {/* Left Panel: Assignees List */}

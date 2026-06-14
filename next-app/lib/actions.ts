@@ -40,11 +40,11 @@ export async function uploadFile(formData: FormData, bucketName: string) {
 }
 
 // 2. Create Assignment (Modified to accept assignees)
-export async function createAssignment(title: string, fileUrl: string, assigneeIds: string[]) {
+export async function createAssignment(title: string, fileUrl: string | null, audioUrls: string[], assigneeIds: string[]) {
   try {
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
-      .insert([{ title, file_url: fileUrl }])
+      .insert([{ title, file_url: fileUrl, audio_urls: audioUrls }])
       .select();
 
     if (assignmentError) {
