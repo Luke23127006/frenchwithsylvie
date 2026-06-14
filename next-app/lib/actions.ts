@@ -113,7 +113,8 @@ export async function getAssignments() {
         .from("assignments")
         .select(`
           *,
-          submissions (count)
+          submissions (count),
+          assignment_assignees (count)
         `)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
@@ -121,7 +122,8 @@ export async function getAssignments() {
       if (error) throw error;
       const formattedData = data.map((assignment: any) => ({
         ...assignment,
-        submissions_count: assignment.submissions?.[0]?.count || 0
+        submissions_count: assignment.submissions?.[0]?.count || 0,
+        assignees_count: assignment.assignment_assignees?.[0]?.count || 0
       }));
       return { data: formattedData };
     }

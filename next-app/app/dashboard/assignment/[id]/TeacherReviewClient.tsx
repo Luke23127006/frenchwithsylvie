@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import Link from "next/link";
 import { updateAssignees, gradeSubmission, updateAssignmentTitle } from "@/lib/actions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";

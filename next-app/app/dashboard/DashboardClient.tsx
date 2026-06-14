@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import Link from "next/link";
 
 interface Student {
@@ -65,13 +65,14 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || (!file && audioFiles.length === 0)) {
-      toast.error("Please provide a title and at least one document or audio file.");
-      return;
-    }
     
     if (selectedStudents.length === 0) {
       toast.error("Please select at least one student to assign.");
+      return;
+    }
+
+    if (!title || (!file && audioFiles.length === 0)) {
+      toast.error("Please provide a title and at least one document or audio file.");
       return;
     }
 
@@ -219,7 +220,12 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   disabled={isPending}
                 />
               </div>
-              <Button type="submit" className="w-full md:w-auto" disabled={isPending}>
+              <Button 
+                type="button" 
+                onClick={(e: any) => handleCreateAssignment(e)} 
+                className="w-full md:w-auto" 
+                disabled={isPending}
+              >
                 <Plus className="mr-2 h-4 w-4" /> {isPending ? "Creating..." : "Create Assignment"}
               </Button>
             </form>

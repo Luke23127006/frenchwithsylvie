@@ -13,7 +13,7 @@ import {
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import {

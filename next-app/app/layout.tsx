@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils";
 import Header from "@/components/Header";
 import HeaderWrapper from "@/components/HeaderWrapper";
+import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
   title: 'French with Sylvie',
@@ -40,6 +41,7 @@ export default function RootLayout({
             <Header />
           </HeaderWrapper>
           {children}
+          <Toaster position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>
