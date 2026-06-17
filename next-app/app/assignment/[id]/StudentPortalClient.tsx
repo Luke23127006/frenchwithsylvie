@@ -13,7 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { uploadFile, submitSolution, removeSubmission } from "@/lib/actions";
+import { uploadFile } from "@/lib/actions/storage";
+import { submitSolution, removeSubmission } from "@/lib/actions/submissions";
 import toast from "react-hot-toast";
 import DOMPurify from "isomorphic-dompurify";
 import { getRatingInfo } from "@/lib/utils";
@@ -205,14 +206,16 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
 
         const formData = new FormData();
         formData.append("file", finalFile);
+        formData.append("bucketName", "submissions");
         
-        const uploadResult = await uploadFile(formData, "submissions");
+        const uploadResult = await uploadFile(formData);
         if (uploadResult.error) {
           toast.error(`Upload failed: ${uploadResult.error}`);
           return;
         }
 
-        const submitResult = await submitSolution(assignment.id, uploadResult.url!);
+        const fileUrl = uploadResult.data?.url!;
+        const submitResult = await submitSolution({ assignmentId: assignment.id, fileUrl });
         if (submitResult.error) {
           toast.error(`Submission failed: ${submitResult.error}`);
           return;
@@ -235,7 +238,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
 
     startTransition(async () => {
       try {
-        const result = await removeSubmission(submission.id, assignment.id);
+        const result = await removeSubmission({ submissionId: existingSubmission.id, assignmentId: assignment.id });
         if (result.error) {
           toast.error(`Removal failed: ${result.error}`);
           return;

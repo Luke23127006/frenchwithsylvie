@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { handleLogin } from "@/lib/actions";
+import { handleLogin } from "@/lib/actions/auth";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -29,12 +29,25 @@ export default function LoginPage() {
         formData.append("redirectUrl", redirectUrl);
       }
 
-      // Call the server action from lib/actions.ts
-      const result = await handleLogin(formData);
+      const username = formData.get("username") as string;
+      const password = formData.get("password") as string;
+      const redirectUrlStr = redirectUrl || undefined;
+
+      const result = await handleLogin({
+        username,
+        password,
+        redirectUrl: redirectUrlStr
+      });
+      console.log("LOGIN RESULT:", JSON.stringify(result));
       
       if (result?.error) {
         // Render the error state UI
         setError(result.error);
+      } else if (result?.data?.redirectUrl) {
+        window.location.href = result.data.redirectUrl;
+      } else {
+        // Default to student if undefined, though it shouldn't be
+        window.location.href = "/student";
       }
     });
   };

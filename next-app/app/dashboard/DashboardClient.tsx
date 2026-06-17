@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createAssignment, uploadFile, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions";
+import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
+import { uploadFile } from "@/lib/actions/storage";
 import {
   Card,
   CardContent,
@@ -82,31 +83,33 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         if (file) {
           const formData = new FormData();
           formData.append("file", file);
+          formData.append("bucketName", "assignments");
           
-          const uploadResult = await uploadFile(formData, "assignments");
+          const uploadResult = await uploadFile(formData);
           if (uploadResult.error) {
             toast.error(`Document upload failed: ${uploadResult.error}`);
             return;
           }
-          fileUrl = uploadResult.url!;
+          fileUrl = uploadResult.data?.url!;
         }
 
         const audioUrls: string[] = [];
         for (const audio of audioFiles) {
           const formData = new FormData();
           formData.append("file", audio);
+          formData.append("bucketName", "assignments");
           
-          const uploadResult = await uploadFile(formData, "assignments");
+          const uploadResult = await uploadFile(formData);
           if (uploadResult.error) {
             toast.error(`Audio upload failed: ${uploadResult.error}`);
             return;
           }
-          if (uploadResult.url) {
-            audioUrls.push(uploadResult.url);
+          if (uploadResult.data?.url) {
+            audioUrls.push(uploadResult.data.url);
           }
         }
 
-        const createResult = await createAssignment(title, fileUrl, audioUrls, selectedStudents);
+        const createResult = await createAssignment({ title, fileUrl, audioUrls, assigneeIds: selectedStudents });
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
           return;
@@ -140,7 +143,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
   const handleHide = (id: string, isHidden: boolean) => {
     startTransition(async () => {
-      const result = await toggleHideAssignment(id, isHidden);
+      const result = await toggleHideAssignment({ assignmentId: id, isHidden });
       if (result.error) toast.error(result.error);
       else toast.success(isHidden ? "Assignment hidden from students." : "Assignment is now visible.");
     });
@@ -149,7 +152,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const handleTrash = (id: string) => {
     if (!window.confirm("Move this assignment to the trash? It will be hidden from students.")) return;
     startTransition(async () => {
-      const result = await moveToTrash(id);
+      const result = await moveToTrash({ assignmentId: id });
       if (result.error) toast.error(result.error);
       else toast.success("Assignment moved to trash.");
     });
@@ -157,7 +160,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
   const handleRestore = (id: string) => {
     startTransition(async () => {
-      const result = await restoreAssignment(id);
+      const result = await restoreAssignment({ assignmentId: id });
       if (result.error) toast.error(result.error);
       else toast.success("Assignment restored.");
     });
@@ -166,7 +169,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const handleDelete = (id: string) => {
     if (!window.confirm("Are you sure you want to completely delete this assignment and all its student submissions? This action cannot be undone.")) return;
     startTransition(async () => {
-      const result = await permanentlyDeleteAssignment(id);
+      const result = await permanentlyDeleteAssignment({ assignmentId: id });
       if (result.error) toast.error(result.error);
       else toast.success("Assignment permanently deleted.");
     });

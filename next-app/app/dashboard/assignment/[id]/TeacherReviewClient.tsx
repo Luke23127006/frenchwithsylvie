@@ -25,7 +25,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import Link from "next/link";
-import { updateAssignees, gradeSubmission, updateAssignmentTitle } from "@/lib/actions";
+import { updateAssignees, updateAssignmentTitle } from "@/lib/actions/assignments";
+import { gradeSubmission } from "@/lib/actions/submissions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { getRatingInfo } from "@/lib/utils";
 
@@ -88,7 +89,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
   const handleSaveAssignees = () => {
     startTransition(async () => {
       try {
-        const result = await updateAssignees(assignmentData.id, selectedStudentIds);
+        const result = await updateAssignees({ assignmentId: assignmentData.id, newAssigneeIds: selectedStudentIds });
         if (result.error) {
           toast.error("Failed to update assignees: " + result.error);
         } else {
@@ -113,7 +114,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
     startTransition(async () => {
       try {
-        const result = await gradeSubmission(selectedAssignee.submission.id, gradeNum.toString(), feedback);
+        const result = await gradeSubmission({ submissionId: selectedAssignee.submission.id, grade: gradeNum.toString(), feedback: feedback });
         if (result.error) {
           toast.error("Failed to save grade: " + result.error);
         } else {
@@ -142,7 +143,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
     startTransition(async () => {
       try {
-        const result = await gradeSubmission(selectedAssignee.submission.id, null, null);
+        const result = await gradeSubmission({ submissionId: selectedAssignee.submission.id, grade: null, feedback: null });
         if (result.error) {
           toast.error("Failed to remove grade: " + result.error);
         } else {
@@ -182,7 +183,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
     startTransition(async () => {
       try {
-        const result = await updateAssignmentTitle(assignmentData.id, titleInput.trim());
+        const result = await updateAssignmentTitle({ assignmentId: assignmentData.id, title: titleInput.trim() });
         if (result.error) {
           toast.error("Failed to update title: " + result.error);
         } else {

@@ -2,7 +2,7 @@
 
 import { FileText, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { logout } from "@/lib/actions";
+import { logout } from "@/lib/actions/auth";
 import {
   Card,
   CardContent,

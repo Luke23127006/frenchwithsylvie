@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import toast from "react-hot-toast";
-import { changePassword } from "@/lib/actions";
+import { changePassword } from "@/lib/actions/auth";
 
 export default function ChangePasswordModal({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [isOpen, setIsOpen] = useState(false);
@@ -40,7 +40,7 @@ export default function ChangePasswordModal({ onSuccess }: { onSuccess?: () => v
       formData.append("oldPassword", oldPassword);
       formData.append("newPassword", newPassword);
       
-      const result = await changePassword(oldPassword, newPassword);
+      const result = await changePassword({ oldPassword, newPassword });
       
       if (result.error) {
         toast.error(`Error: ${result.error}`);

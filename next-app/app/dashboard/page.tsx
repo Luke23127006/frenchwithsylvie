@@ -1,10 +1,11 @@
-import { getAssignments, getAllStudents, getTrashedAssignments } from "@/lib/actions";
+import { getAssignments, getTrashedAssignments } from "@/lib/actions/assignments";
+import { getAllStudents } from "@/lib/actions/users";
 import DashboardClient from "./DashboardClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const { data: assignments, error } = await getAssignments();
+  const { data: assignments, error } = await getAssignments({});
 
   if (error) {
     return (
@@ -15,8 +16,8 @@ export default async function DashboardPage() {
     );
   }
 
-  const { data: students } = await getAllStudents();
-  const { data: trashedAssignments } = await getTrashedAssignments();
+  const { data: students } = await getAllStudents({});
+  const { data: trashedAssignments } = await getTrashedAssignments({});
 
   return <DashboardClient assignments={assignments || []} students={students || []} trashedAssignments={trashedAssignments || []} />;
 }

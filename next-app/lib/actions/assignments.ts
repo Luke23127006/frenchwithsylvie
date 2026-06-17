@@ -1,0 +1,302 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createSafeAction } from "../safe-action";
+import { z } from "zod";
+
+export const createAssignment = createSafeAction(
+  z.object({
+    title: z.string().min(1),
+    fileUrl: z.string().nullable(),
+    audioUrls: z.array(z.string()),
+    assigneeIds: z.array(z.string()),
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { data: assignmentData, error: assignmentError } = await supabase
+      .from("assignments")
+      .insert([{ title: input.title, file_url: input.fileUrl, audio_urls: input.audioUrls }])
+      .select();
+
+    if (assignmentError) throw new Error(assignmentError.message);
+
+    const assignmentId = assignmentData[0].id;
+    
+    if (input.assigneeIds && input.assigneeIds.length > 0) {
+      const assigneesToInsert = input.assigneeIds.map(id => ({
+        assignment_id: assignmentId,
+        student_id: id
+      }));
+      
+      const { error: assigneesError } = await supabase
+        .from("assignment_assignees")
+        .insert(assigneesToInsert);
+        
+      if (assigneesError) throw new Error(assigneesError.message);
+    }
+
+    revalidatePath("/dashboard");
+    return assignmentData;
+  }
+);
+
+export const getAssignments = createSafeAction(
+  z.object({}),
+  [], // both student and teacher
+  async ({ user, supabase }) => {
+    if (user.role === 'student') {
+      const { data, error } = await supabase
+        .from("assignments")
+        .select(`
+          *,
+          assignment_assignees!inner(student_id),
+          submissions (id, student_id)
+        `)
+        .eq('assignment_assignees.student_id', user.id)
+        .is('deleted_at', null)
+        .eq('is_hidden', false)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw new Error(error.message);
+      const formattedData = data.map((assignment: any) => ({
+        ...assignment,
+        submissions_count: assignment.submissions?.length || 0,
+        has_submitted: assignment.submissions?.some((sub: any) => sub.student_id === user.id) || false
+      }));
+      return formattedData;
+    } else {
+      const { data, error } = await supabase
+        .from("assignments")
+        .select(`
+          *,
+          submissions (count),
+          assignment_assignees (count)
+        `)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw new Error(error.message);
+      const formattedData = data.map((assignment: any) => ({
+        ...assignment,
+        submissions_count: assignment.submissions?.[0]?.count || 0,
+        assignees_count: assignment.assignment_assignees?.[0]?.count || 0
+      }));
+      return formattedData;
+    }
+  }
+);
+
+export const getAssignmentById = createSafeAction(
+  z.object({ id: z.string() }),
+  [], // both
+  async ({ input, user, supabase }) => {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select(`
+        *,
+        assignment_assignees(student_id)
+      `)
+      .eq("id", input.id)
+      .is("deleted_at", null)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    if (user.role === "student") {
+      if (data.is_hidden) throw new Error("Assignment not found");
+      
+      const isAssigned = data.assignment_assignees?.some(
+        (a: any) => a.student_id === user.id
+      );
+      
+      if (!isAssigned) throw new Error("You are not assigned to this assignment.");
+    }
+
+    const { assignment_assignees, ...assignmentData } = data;
+    return assignmentData;
+  }
+);
+
+export const getAssignmentDetailsForTeacher = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { data: assignment, error: assignmentError } = await supabase
+      .from("assignments")
+      .select("*")
+      .eq("id", input.assignmentId)
+      .single();
+
+    if (assignmentError) throw new Error(assignmentError.message);
+
+    const { data: assigneesData, error: assigneesError } = await supabase
+      .from("assignment_assignees")
+      .select(`
+        student_id,
+        users ( full_name, username )
+      `)
+      .eq("assignment_id", input.assignmentId);
+
+    if (assigneesError) throw new Error(assigneesError.message);
+
+    const { data: submissionsData, error: submissionsError } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("assignment_id", input.assignmentId);
+
+    if (submissionsError) throw new Error(submissionsError.message);
+
+    const assignees = assigneesData.map((a: any) => {
+      const submission = submissionsData.find((s: any) => s.student_id === a.student_id);
+      return {
+        id: a.student_id,
+        full_name: a.users.full_name,
+        username: a.users.username,
+        has_submitted: !!submission,
+        submission: submission || null
+      };
+    });
+
+    return { 
+      ...assignment,
+      assignees
+    };
+  }
+);
+
+export const updateAssignees = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    newAssigneeIds: z.array(z.string())
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { error: deleteError } = await supabase.from("assignment_assignees").delete().eq("assignment_id", input.assignmentId);
+    if (deleteError) throw new Error(deleteError.message);
+
+    if (input.newAssigneeIds && input.newAssigneeIds.length > 0) {
+      const assigneesToInsert = input.newAssigneeIds.map(id => ({
+        assignment_id: input.assignmentId,
+        student_id: id
+      }));
+      const { error: insertError } = await supabase.from("assignment_assignees").insert(assigneesToInsert);
+      if (insertError) throw new Error(insertError.message);
+    }
+    
+    revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
+    return { success: true };
+  }
+);
+
+export const updateAssignmentTitle = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    title: z.string().min(1)
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { data, error } = await supabase
+      .from("assignments")
+      .update({ title: input.title })
+      .eq("id", input.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
+    revalidatePath(`/dashboard`);
+    return data;
+  }
+);
+
+export const toggleHideAssignment = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    isHidden: z.boolean()
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { error } = await supabase
+      .from("assignments")
+      .update({ is_hidden: input.isHidden })
+      .eq("id", input.assignmentId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  }
+);
+
+export const moveToTrash = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { error } = await supabase
+      .from("assignments")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", input.assignmentId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  }
+);
+
+export const restoreAssignment = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { error } = await supabase
+      .from("assignments")
+      .update({ deleted_at: null })
+      .eq("id", input.assignmentId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  }
+);
+
+export const permanentlyDeleteAssignment = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { error } = await supabase
+      .from("assignments")
+      .delete()
+      .eq("id", input.assignmentId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard`);
+    return { success: true };
+  }
+);
+
+export const getTrashedAssignments = createSafeAction(
+  z.object({}),
+  ["teacher"],
+  async ({ supabase }) => {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select(`
+        *,
+        submissions (count)
+      `)
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    const formattedData = data.map((assignment: any) => ({
+      ...assignment,
+      submissions_count: assignment.submissions?.[0]?.count || 0
+    }));
+
+    return formattedData;
+  }
+);
