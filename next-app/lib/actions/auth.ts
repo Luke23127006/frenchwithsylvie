@@ -2,36 +2,36 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from '../supabase'
 import bcrypt from "bcryptjs";
-import { signToken, verifyToken } from "../auth";
+import { signToken } from "../auth";
+import { createSafeAction, createPublicAction } from "../safe-action";
+import { z } from "zod";
 
-export async function handleLogin(formData: FormData) {
-  let redirectUrl = formData.get("redirectUrl") as string || "";
-  try {
-    const supabase = await createClient();
+const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+  redirectUrl: z.string().optional(),
+});
+
+export const handleLogin = createPublicAction(
+  loginSchema,
+  async ({ input, supabase }) => {
+    let redirectUrl = input.redirectUrl || "";
     
-    const username = formData.get("username") as string;
-    const passwordString = formData.get("password") as string;
-
-    if (!username || !passwordString) {
-      return { error: "Username and password are required" };
-    }
-
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
-      .eq("username", username)
+      .eq("username", input.username)
       .single();
 
     if (error || !user) {
-      return { error: "Invalid username or password" };
+      throw new Error("Invalid username or password");
     }
 
-    const isPasswordValid = await bcrypt.compare(passwordString, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(input.password, user.password_hash);
 
     if (!isPasswordValid) {
-      return { error: "Invalid username or password" };
+      throw new Error("Invalid username or password");
     }
 
     const token = await signToken({
@@ -55,97 +55,73 @@ export async function handleLogin(formData: FormData) {
       redirectUrl = user.role === "student" ? "/student" : "/dashboard";
     }
 
-  } catch (error: any) {
-    console.error("Error in login:", error);
-    return { error: error.message || "An unexpected error occurred" };
+    return { redirectUrl };
   }
+);
 
-  if (redirectUrl) {
-    redirect(redirectUrl);
-  }
-}
-
+// We keep logout as a regular server action because it requires no input/schema and just deletes a cookie
 export async function logout() {
   const cookieStore = await cookies();
   cookieStore.delete("auth_token");
   redirect("/login");
 }
 
-export async function changePassword(oldPassword: string, newPassword: string) {
-  try {
-    const supabase = await createClient();
+const changePasswordSchema = z.object({
+  oldPassword: z.string().min(1),
+  newPassword: z.string().min(6),
+});
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload) return { error: "Unauthorized" };
-
-    if (!oldPassword || !newPassword) {
-      return { error: "Old password and new password are required" };
-    }
-
-    if (newPassword.length < 6) {
-      return { error: "New password must be at least 6 characters" };
-    }
-
-    const { data: user, error } = await supabase
+export const changePassword = createSafeAction(
+  changePasswordSchema,
+  [], // Accessible to any authenticated role
+  async ({ input, user, supabase }) => {
+    const { data: userData, error } = await supabase
       .from("users")
       .select("*")
-      .eq("id", payload.id)
+      .eq("id", user.id)
       .single();
 
-    if (error || !user) {
-      return { error: "User not found" };
+    if (error || !userData) {
+      throw new Error("User not found");
     }
 
-    const isPasswordValid = await bcrypt.compare(oldPassword, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(input.oldPassword, userData.password_hash);
     if (!isPasswordValid) {
-      return { error: "Incorrect old password" };
+      throw new Error("Incorrect old password");
     }
 
     const saltRounds = 10;
-    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+    const newPasswordHash = await bcrypt.hash(input.newPassword, saltRounds);
 
     const { error: updateError } = await supabase
       .from("users")
       .update({ password_hash: newPasswordHash })
-      .eq("id", payload.id);
+      .eq("id", user.id);
 
-    if (updateError) throw updateError;
+    if (updateError) throw new Error(updateError.message);
 
     return { success: true };
-  } catch (error: any) {
-    console.error("Error in changePassword:", error);
-    return { error: error.message };
   }
-}
+);
 
-export async function updateOnboardingState() {
-  try {
-    const supabase = await createClient();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload) return { error: "Unauthorized" };
-
+export const updateOnboardingState = createSafeAction(
+  z.object({}), // No input required
+  ["student"], // Only students need onboarding
+  async ({ user, supabase }) => {
     const { error } = await supabase
       .from("users")
       .update({ state: 'COMPLETED' })
-      .eq("id", payload.id);
+      .eq("id", user.id);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     // Issue a new token with updated state
     const newToken = await signToken({
-      ...payload,
+      ...user,
       state: 'COMPLETED',
     });
 
+    const cookieStore = await cookies();
     cookieStore.set("auth_token", newToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -155,8 +131,5 @@ export async function updateOnboardingState() {
     });
 
     return { success: true };
-  } catch (error: any) {
-    console.error("Error in updateOnboardingState:", error);
-    return { error: error.message };
   }
-}
+);

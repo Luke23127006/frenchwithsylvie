@@ -1,19 +1,18 @@
 "use server";
 
-import { createClient } from '../supabase'
+import { createSafeAction } from "../safe-action";
+import { z } from "zod";
 
-export async function getAllStudents() {
-  try {
-    const supabase = await createClient();
-
+export const getAllStudents = createSafeAction(
+  z.object({}),
+  ["teacher"], // Only teachers should be listing all students usually
+  async ({ supabase }) => {
     const { data, error } = await supabase
       .from('users')
       .select('id, full_name, username')
       .eq('role', 'student');
       
-    if (error) throw error;
-    return { data };
-  } catch (error: any) {
-    return { error: error.message };
+    if (error) throw new Error(error.message);
+    return data;
   }
-}
+);

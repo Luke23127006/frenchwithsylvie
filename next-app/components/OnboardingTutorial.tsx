@@ -52,7 +52,7 @@ export default function OnboardingTutorial() {
         origin: { y: 0.6 }
       });
       // Update the real backend
-      updateOnboardingState().catch(console.error);
+      updateOnboardingState({}).catch(console.error);
     }, 500);
   };
 

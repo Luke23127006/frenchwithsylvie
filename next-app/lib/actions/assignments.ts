@@ -1,28 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { createClient } from '../supabase'
-import { verifyToken } from "../auth";
+import { createSafeAction } from "../safe-action";
+import { z } from "zod";
 
-export async function createAssignment(title: string, fileUrl: string | null, audioUrls: string[], assigneeIds: string[]) {
-  try {
-    const supabase = await createClient();
-
+export const createAssignment = createSafeAction(
+  z.object({
+    title: z.string().min(1),
+    fileUrl: z.string().nullable(),
+    audioUrls: z.array(z.string()),
+    assigneeIds: z.array(z.string()),
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
-      .insert([{ title, file_url: fileUrl, audio_urls: audioUrls }])
+      .insert([{ title: input.title, file_url: input.fileUrl, audio_urls: input.audioUrls }])
       .select();
 
-    if (assignmentError) {
-      console.error("Error creating assignment:", assignmentError);
-      return { error: assignmentError.message };
-    }
+    if (assignmentError) throw new Error(assignmentError.message);
 
     const assignmentId = assignmentData[0].id;
     
-    if (assigneeIds && assigneeIds.length > 0) {
-      const assigneesToInsert = assigneeIds.map(id => ({
+    if (input.assigneeIds && input.assigneeIds.length > 0) {
+      const assigneesToInsert = input.assigneeIds.map(id => ({
         assignment_id: assignmentId,
         student_id: id
       }));
@@ -31,32 +32,19 @@ export async function createAssignment(title: string, fileUrl: string | null, au
         .from("assignment_assignees")
         .insert(assigneesToInsert);
         
-      if (assigneesError) {
-        console.error("Error adding assignees:", assigneesError);
-        return { error: assigneesError.message };
-      }
+      if (assigneesError) throw new Error(assigneesError.message);
     }
 
     revalidatePath("/dashboard");
-    return { data: assignmentData };
-  } catch (error: any) {
-    console.error("Error in createAssignment:", error);
-    return { error: error.message || "An unexpected error occurred" };
+    return assignmentData;
   }
-}
+);
 
-export async function getAssignments() {
-  try {
-    const supabase = await createClient();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload) return { error: "Invalid token" };
-
-    if (payload.role === 'student') {
+export const getAssignments = createSafeAction(
+  z.object({}),
+  [], // both student and teacher
+  async ({ user, supabase }) => {
+    if (user.role === 'student') {
       const { data, error } = await supabase
         .from("assignments")
         .select(`
@@ -64,18 +52,18 @@ export async function getAssignments() {
           assignment_assignees!inner(student_id),
           submissions (id, student_id)
         `)
-        .eq('assignment_assignees.student_id', payload.id)
+        .eq('assignment_assignees.student_id', user.id)
         .is('deleted_at', null)
         .eq('is_hidden', false)
         .order('created_at', { ascending: false });
         
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       const formattedData = data.map((assignment: any) => ({
         ...assignment,
         submissions_count: assignment.submissions?.length || 0,
-        has_submitted: assignment.submissions?.some((sub: any) => sub.student_id === payload.id) || false
+        has_submitted: assignment.submissions?.some((sub: any) => sub.student_id === user.id) || false
       }));
-      return { data: formattedData };
+      return formattedData;
     } else {
       const { data, error } = await supabase
         .from("assignments")
@@ -87,80 +75,59 @@ export async function getAssignments() {
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       const formattedData = data.map((assignment: any) => ({
         ...assignment,
         submissions_count: assignment.submissions?.[0]?.count || 0,
         assignees_count: assignment.assignment_assignees?.[0]?.count || 0
       }));
-      return { data: formattedData };
+      return formattedData;
     }
-  } catch (error: any) {
-    console.error("Error in getAssignments:", error);
-    return { error: error.message || "An unexpected error occurred" };
   }
-}
+);
 
-export async function getAssignmentById(id: string) {
-  try {
-    const supabase = await createClient();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload) return { error: "Invalid token" };
-
+export const getAssignmentById = createSafeAction(
+  z.object({ id: z.string() }),
+  [], // both
+  async ({ input, user, supabase }) => {
     const { data, error } = await supabase
       .from("assignments")
       .select(`
         *,
         assignment_assignees(student_id)
       `)
-      .eq("id", id)
+      .eq("id", input.id)
       .is("deleted_at", null)
       .single();
 
-    if (error) {
-      console.error("Error fetching assignment:", error);
-      return { error: error.message };
-    }
+    if (error) throw new Error(error.message);
 
-    if (payload.role === "student") {
-      if (data.is_hidden) {
-        return { error: "Assignment not found" }; // Hidden acts like it doesn't exist
-      }
+    if (user.role === "student") {
+      if (data.is_hidden) throw new Error("Assignment not found");
       
       const isAssigned = data.assignment_assignees?.some(
-        (a: any) => a.student_id === payload.id
+        (a: any) => a.student_id === user.id
       );
       
-      if (!isAssigned) {
-        return { authError: "You are not assigned to this assignment." };
-      }
+      if (!isAssigned) throw new Error("You are not assigned to this assignment.");
     }
 
-    // Remove the assignees array before returning to keep payload clean
     const { assignment_assignees, ...assignmentData } = data;
-    return { data: assignmentData };
-  } catch (error: any) {
-    console.error("Error in getAssignmentById:", error);
-    return { error: error.message || "An unexpected error occurred" };
+    return assignmentData;
   }
-}
+);
 
-export async function getAssignmentDetailsForTeacher(assignmentId: string) {
-  try {
-    const supabase = await createClient();
-    
+export const getAssignmentDetailsForTeacher = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { data: assignment, error: assignmentError } = await supabase
       .from("assignments")
       .select("*")
-      .eq("id", assignmentId)
+      .eq("id", input.assignmentId)
       .single();
 
-    if (assignmentError) throw assignmentError;
+    if (assignmentError) throw new Error(assignmentError.message);
 
     const { data: assigneesData, error: assigneesError } = await supabase
       .from("assignment_assignees")
@@ -168,16 +135,16 @@ export async function getAssignmentDetailsForTeacher(assignmentId: string) {
         student_id,
         users ( full_name, username )
       `)
-      .eq("assignment_id", assignmentId);
+      .eq("assignment_id", input.assignmentId);
 
-    if (assigneesError) throw assigneesError;
+    if (assigneesError) throw new Error(assigneesError.message);
 
     const { data: submissionsData, error: submissionsError } = await supabase
       .from("submissions")
       .select("*")
-      .eq("assignment_id", assignmentId);
+      .eq("assignment_id", input.assignmentId);
 
-    if (submissionsError) throw submissionsError;
+    if (submissionsError) throw new Error(submissionsError.message);
 
     const assignees = assigneesData.map((a: any) => {
       const submission = submissionsData.find((s: any) => s.student_id === a.student_id);
@@ -191,179 +158,129 @@ export async function getAssignmentDetailsForTeacher(assignmentId: string) {
     });
 
     return { 
-      data: {
-        ...assignment,
-        assignees
-      }
+      ...assignment,
+      assignees
     };
-  } catch (error: any) {
-    return { error: error.message };
   }
-}
+);
 
-export async function updateAssignees(assignmentId: string, newAssigneeIds: string[]) {
-  try {
-    const supabase = await createClient();
+export const updateAssignees = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    newAssigneeIds: z.array(z.string())
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    const { error: deleteError } = await supabase.from("assignment_assignees").delete().eq("assignment_id", input.assignmentId);
+    if (deleteError) throw new Error(deleteError.message);
 
-    const { error: deleteError } = await supabase.from("assignment_assignees").delete().eq("assignment_id", assignmentId);
-    if (deleteError) throw deleteError;
-
-    if (newAssigneeIds && newAssigneeIds.length > 0) {
-      const assigneesToInsert = newAssigneeIds.map(id => ({
-        assignment_id: assignmentId,
+    if (input.newAssigneeIds && input.newAssigneeIds.length > 0) {
+      const assigneesToInsert = input.newAssigneeIds.map(id => ({
+        assignment_id: input.assignmentId,
         student_id: id
       }));
       const { error: insertError } = await supabase.from("assignment_assignees").insert(assigneesToInsert);
-      if (insertError) throw insertError;
+      if (insertError) throw new Error(insertError.message);
     }
     
-    revalidatePath(`/dashboard/assignment/${assignmentId}`);
+    revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
   }
-}
+);
 
-export async function updateAssignmentTitle(assignmentId: string, title: string) {
-  try {
-    const supabase = await createClient();
-    
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
-
+export const updateAssignmentTitle = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    title: z.string().min(1)
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { data, error } = await supabase
       .from("assignments")
-      .update({ title })
-      .eq("id", assignmentId)
+      .update({ title: input.title })
+      .eq("id", input.assignmentId)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
-    revalidatePath(`/dashboard/assignment/${assignmentId}`);
+    revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
     revalidatePath(`/dashboard`);
-    return { data };
-  } catch (error: any) {
-    console.error("Error in updateAssignmentTitle:", error);
-    return { error: error.message };
+    return data;
   }
-}
+);
 
-export async function toggleHideAssignment(assignmentId: string, isHidden: boolean) {
-  try {
-    const supabase = await createClient();
-    
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
-
+export const toggleHideAssignment = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    isHidden: z.boolean()
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { error } = await supabase
       .from("assignments")
-      .update({ is_hidden: isHidden })
-      .eq("id", assignmentId);
+      .update({ is_hidden: input.isHidden })
+      .eq("id", input.assignmentId);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     revalidatePath(`/dashboard`);
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
   }
-}
+);
 
-export async function moveToTrash(assignmentId: string) {
-  try {
-    const supabase = await createClient();
-    
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
-
+export const moveToTrash = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { error } = await supabase
       .from("assignments")
       .update({ deleted_at: new Date().toISOString() })
-      .eq("id", assignmentId);
+      .eq("id", input.assignmentId);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     revalidatePath(`/dashboard`);
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
   }
-}
+);
 
-export async function restoreAssignment(assignmentId: string) {
-  try {
-    const supabase = await createClient();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
-
+export const restoreAssignment = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { error } = await supabase
       .from("assignments")
       .update({ deleted_at: null })
-      .eq("id", assignmentId);
+      .eq("id", input.assignmentId);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     revalidatePath(`/dashboard`);
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
   }
-}
+);
 
-export async function permanentlyDeleteAssignment(assignmentId: string) {
-  try {
-    const supabase = await createClient();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
-
+export const permanentlyDeleteAssignment = createSafeAction(
+  z.object({ assignmentId: z.string() }),
+  ["teacher"],
+  async ({ input, supabase }) => {
     const { error } = await supabase
       .from("assignments")
       .delete()
-      .eq("id", assignmentId);
+      .eq("id", input.assignmentId);
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     revalidatePath(`/dashboard`);
     return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
   }
-}
+);
 
-export async function getTrashedAssignments() {
-  try {
-    const supabase = await createClient();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    if (!token) return { error: "Not authenticated" };
-    
-    const payload = await verifyToken(token);
-    if (!payload || payload.role !== 'teacher') return { error: "Unauthorized" };
-
+export const getTrashedAssignments = createSafeAction(
+  z.object({}),
+  ["teacher"],
+  async ({ supabase }) => {
     const { data, error } = await supabase
       .from("assignments")
       .select(`
@@ -373,16 +290,13 @@ export async function getTrashedAssignments() {
       .not("deleted_at", "is", null)
       .order("deleted_at", { ascending: false });
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
 
     const formattedData = data.map((assignment: any) => ({
       ...assignment,
       submissions_count: assignment.submissions?.[0]?.count || 0
     }));
 
-    return { data: formattedData };
-  } catch (error: any) {
-    console.error("Error fetching trashed assignments:", error);
-    return { error: error.message };
+    return formattedData;
   }
-}
+);

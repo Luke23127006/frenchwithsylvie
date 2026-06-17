@@ -40,7 +40,7 @@ export default function ChangePasswordModal({ onSuccess }: { onSuccess?: () => v
       formData.append("oldPassword", oldPassword);
       formData.append("newPassword", newPassword);
       
-      const result = await changePassword(oldPassword, newPassword);
+      const result = await changePassword({ oldPassword, newPassword });
       
       if (result.error) {
         toast.error(`Error: ${result.error}`);

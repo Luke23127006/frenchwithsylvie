@@ -1,5 +1,13 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
+export type TokenPayload = JWTPayload & {
+  id: string;
+  username: string;
+  full_name: string;
+  role: "teacher" | "student" | "admin";
+  state: string;
+};
+
 const getSecretKey = () => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {

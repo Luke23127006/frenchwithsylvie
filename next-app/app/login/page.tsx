@@ -29,12 +29,25 @@ export default function LoginPage() {
         formData.append("redirectUrl", redirectUrl);
       }
 
-      // Call the server action from lib/actions/auth.ts
-      const result = await handleLogin(formData);
+      const username = formData.get("username") as string;
+      const password = formData.get("password") as string;
+      const redirectUrlStr = redirectUrl || undefined;
+
+      const result = await handleLogin({
+        username,
+        password,
+        redirectUrl: redirectUrlStr
+      });
+      console.log("LOGIN RESULT:", JSON.stringify(result));
       
       if (result?.error) {
         // Render the error state UI
         setError(result.error);
+      } else if (result?.data?.redirectUrl) {
+        window.location.href = result.data.redirectUrl;
+      } else {
+        // Default to student if undefined, though it shouldn't be
+        window.location.href = "/student";
       }
     });
   };

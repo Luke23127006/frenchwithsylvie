@@ -11,8 +11,6 @@ test.describe('Auth Workflow', () => {
     await expect(page).toHaveURL(/.*\/student/);
 
     // 2. Logout
-    const userMenuButton = page.locator('button:has-text("luke")').or(page.locator('button:has-text("L")').first());
-    await userMenuButton.click();
     await page.getByText('Logout').click();
 
     await expect(page).toHaveURL(/.*\/login/);
