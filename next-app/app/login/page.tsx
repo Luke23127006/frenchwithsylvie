@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { handleLogin } from "@/lib/actions";
+import { handleLogin } from "@/lib/actions/auth";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export default function LoginPage() {
         formData.append("redirectUrl", redirectUrl);
       }
 
-      // Call the server action from lib/actions.ts
+      // Call the server action from lib/actions/auth.ts
       const result = await handleLogin(formData);
       
       if (result?.error) {

@@ -1,4 +1,5 @@
-import { getAssignmentById, getStudentSubmission } from "@/lib/actions";
+import { getAssignmentById } from "@/lib/actions/assignments";
+import { getStudentSubmission } from "@/lib/actions/submissions";
 import StudentPortalClient from "./StudentPortalClient";
 import { notFound, redirect } from "next/navigation";
 

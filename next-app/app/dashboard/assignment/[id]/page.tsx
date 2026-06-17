@@ -1,4 +1,5 @@
-import { getAssignmentDetailsForTeacher, getAllStudents } from "@/lib/actions";
+import { getAssignmentDetailsForTeacher } from "@/lib/actions/assignments";
+import { getAllStudents } from "@/lib/actions/users";
 import TeacherReviewClient from "./TeacherReviewClient";
 import { notFound } from "next/navigation";
 

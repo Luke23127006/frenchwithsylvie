@@ -1,4 +1,4 @@
-import { getAssignments } from "@/lib/actions";
+import { getAssignments } from "@/lib/actions/assignments";
 import StudentDashboardClient from "./StudentDashboardClient";
 import { Suspense } from "react";
 

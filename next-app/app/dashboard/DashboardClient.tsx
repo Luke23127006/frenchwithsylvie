@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createAssignment, uploadFile, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions";
+import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
+import { uploadFile } from "@/lib/actions/storage";
 import {
   Card,
   CardContent,

@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import toast from "react-hot-toast";
-import { changePassword } from "@/lib/actions";
+import { changePassword } from "@/lib/actions/auth";
 
 export default function ChangePasswordModal({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [isOpen, setIsOpen] = useState(false);

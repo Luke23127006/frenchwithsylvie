@@ -1,4 +1,5 @@
-import { getAssignments, getAllStudents, getTrashedAssignments } from "@/lib/actions";
+import { getAssignments, getTrashedAssignments } from "@/lib/actions/assignments";
+import { getAllStudents } from "@/lib/actions/users";
 import DashboardClient from "./DashboardClient";
 
 export const dynamic = "force-dynamic";

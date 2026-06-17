@@ -13,7 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { uploadFile, submitSolution, removeSubmission } from "@/lib/actions";
+import { uploadFile } from "@/lib/actions/storage";
+import { submitSolution, removeSubmission } from "@/lib/actions/submissions";
 import toast from "react-hot-toast";
 import DOMPurify from "isomorphic-dompurify";
 import { getRatingInfo } from "@/lib/utils";

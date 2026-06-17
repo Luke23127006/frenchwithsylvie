@@ -25,7 +25,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import Link from "next/link";
-import { updateAssignees, gradeSubmission, updateAssignmentTitle } from "@/lib/actions";
+import { updateAssignees, updateAssignmentTitle } from "@/lib/actions/assignments";
+import { gradeSubmission } from "@/lib/actions/submissions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { getRatingInfo } from "@/lib/utils";
 

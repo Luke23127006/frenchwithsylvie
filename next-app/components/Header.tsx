@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
-import { logout } from "@/lib/actions";
+import { logout } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import ChangePasswordModal from "./ChangePasswordModal";
 import Image from "next/image";

@@ -7,7 +7,7 @@ import MockAssignmentCard from "./MockAssignmentCard";
 import OnboardingChecklist from "./OnboardingChecklist";
 import OnboardingSpotlight from "./OnboardingSpotlight";
 import { Input } from "@/components/ui/input";
-import { updateOnboardingState } from "@/lib/actions";
+import { updateOnboardingState } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 
 export default function OnboardingTutorial() {
