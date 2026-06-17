@@ -3,13 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { supabase } from "./supabase";
+import { createClient } from './supabase'
 import bcrypt from "bcryptjs";
 import { signToken, verifyToken } from "./auth";
 
 // 1. Upload File
 export async function uploadFile(formData: FormData, bucketName: string) {
   try {
+    const supabase = await createClient();
+
     const file = formData.get("file") as File;
     if (!file) {
       return { error: "No file provided" };
@@ -42,6 +44,8 @@ export async function uploadFile(formData: FormData, bucketName: string) {
 // 2. Create Assignment (Modified to accept assignees)
 export async function createAssignment(title: string, fileUrl: string | null, audioUrls: string[], assigneeIds: string[]) {
   try {
+    const supabase = await createClient();
+
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
       .insert([{ title, file_url: fileUrl, audio_urls: audioUrls }])
@@ -81,6 +85,8 @@ export async function createAssignment(title: string, fileUrl: string | null, au
 // 3. Get Assignments (Filtered by role)
 export async function getAssignments() {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -136,6 +142,8 @@ export async function getAssignments() {
 // 4. Get Assignment By Id (With Authorization Check)
 export async function getAssignmentById(id: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -184,6 +192,8 @@ export async function getAssignmentById(id: string) {
 // 5. Submit Solution (Auto extract student from token)
 export async function submitSolution(assignmentId: string, fileUrl: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -214,6 +224,8 @@ export async function submitSolution(assignmentId: string, fileUrl: string) {
 // 6. Get Submissions By Assignment (Deprecated/Replaced by getAssignmentDetailsForTeacher)
 export async function getSubmissionsByAssignment(assignmentId: string) {
   try {
+    const supabase = await createClient();
+
     const { data, error } = await supabase
       .from("submissions")
       .select("*")
@@ -235,6 +247,8 @@ export async function getSubmissionsByAssignment(assignmentId: string) {
 // NEW: 9. Get All Students
 export async function getAllStudents() {
   try {
+    const supabase = await createClient();
+
     const { data, error } = await supabase
       .from('users')
       .select('id, full_name, username')
@@ -250,6 +264,8 @@ export async function getAllStudents() {
 // NEW: 10. Get Assignment Details For Teacher
 export async function getAssignmentDetailsForTeacher(assignmentId: string) {
   try {
+    const supabase = await createClient();
+    
     const { data: assignment, error: assignmentError } = await supabase
       .from("assignments")
       .select("*")
@@ -300,6 +316,8 @@ export async function getAssignmentDetailsForTeacher(assignmentId: string) {
 // NEW: 11. Update Assignees
 export async function updateAssignees(assignmentId: string, newAssigneeIds: string[]) {
   try {
+    const supabase = await createClient();
+
     const { error: deleteError } = await supabase.from("assignment_assignees").delete().eq("assignment_id", assignmentId);
     if (deleteError) throw deleteError;
 
@@ -322,6 +340,8 @@ export async function updateAssignees(assignmentId: string, newAssigneeIds: stri
 // NEW: 12. Grade Submission
 export async function gradeSubmission(submissionId: string, grade: string | null, feedback: string | null) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -349,6 +369,8 @@ export async function gradeSubmission(submissionId: string, grade: string | null
 // NEW: 13. Update Assignment Title
 export async function updateAssignmentTitle(assignmentId: string, title: string) {
   try {
+    const supabase = await createClient();
+    
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -377,6 +399,8 @@ export async function updateAssignmentTitle(assignmentId: string, title: string)
 // NEW: 13. Get Student Submission
 export async function getStudentSubmission(assignmentId: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -402,6 +426,8 @@ export async function getStudentSubmission(assignmentId: string) {
 // NEW: 15. Remove Student Submission
 export async function removeSubmission(submissionId: string, assignmentId: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -428,6 +454,8 @@ export async function removeSubmission(submissionId: string, assignmentId: strin
 // NEW: 17. Toggle Hide Assignment
 export async function toggleHideAssignment(assignmentId: string, isHidden: boolean) {
   try {
+    const supabase = await createClient();
+    
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -452,6 +480,8 @@ export async function toggleHideAssignment(assignmentId: string, isHidden: boole
 // NEW: 18. Move to Trash
 export async function moveToTrash(assignmentId: string) {
   try {
+    const supabase = await createClient();
+    
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -476,6 +506,8 @@ export async function moveToTrash(assignmentId: string) {
 // NEW: 19. Restore Assignment
 export async function restoreAssignment(assignmentId: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -500,6 +532,8 @@ export async function restoreAssignment(assignmentId: string) {
 // NEW: 20. Permanently Delete Assignment
 export async function permanentlyDeleteAssignment(assignmentId: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -524,6 +558,8 @@ export async function permanentlyDeleteAssignment(assignmentId: string) {
 // NEW: 21. Get Trashed Assignments
 export async function getTrashedAssignments() {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -558,6 +594,8 @@ export async function getTrashedAssignments() {
 export async function handleLogin(formData: FormData) {
   let redirectUrl = formData.get("redirectUrl") as string || "";
   try {
+    const supabase = await createClient();
+    
     const username = formData.get("username") as string;
     const passwordString = formData.get("password") as string;
 
@@ -622,6 +660,8 @@ export async function logout() {
 // NEW: 16. Change Password
 export async function changePassword(oldPassword: string, newPassword: string) {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
@@ -672,6 +712,8 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 // NEW: 22. Update Onboarding State
 export async function updateOnboardingState() {
   try {
+    const supabase = await createClient();
+
     const cookieStore = await cookies();
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return { error: "Not authenticated" };
