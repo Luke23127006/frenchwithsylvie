@@ -104,7 +104,7 @@ function IdeaOneClassic() {
         {/* Placeholder for Teacher's Portrait */}
         <div className="relative aspect-[4/5] bg-muted rounded-2xl overflow-hidden border border-border flex items-center justify-center">
           <img
-            src="/api/placeholder/600/800"
+            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&h=800&auto=format&fit=crop"
             alt="Giáo viên tiếng Pháp"
             className="w-full h-full object-cover opacity-80"
           />
@@ -155,7 +155,7 @@ function IdeaTwoCentered() {
         <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
         <div className="relative aspect-video bg-muted rounded-2xl border border-border flex items-center justify-center overflow-hidden">
           <img
-            src="/api/placeholder/1200/675"
+            src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1200&h=675&auto=format&fit=crop"
             alt="Video Thumbnail"
             className="w-full h-full object-cover opacity-60"
           />
@@ -218,7 +218,7 @@ function IdeaThreeBento() {
         {/* Ô 2: Ảnh Portrait / Video Nhỏ */}
         <div className="md:col-span-2 md:row-span-2 bg-muted rounded-3xl border border-border overflow-hidden relative group">
           <img
-            src="/api/placeholder/600/600"
+            src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=600&h=600&auto=format&fit=crop"
             alt="Giáo viên"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
           />
