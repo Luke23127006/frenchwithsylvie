@@ -48,6 +48,8 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
   const [isPending, startTransition] = useTransition();
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
 
   const handleStudentToggle = (studentId: string) => {
     setSelectedStudents((prev) => 
@@ -78,64 +80,88 @@ export default function DashboardClient({ assignments, students, trashedAssignme
       return;
     }
 
-    startTransition(async () => {
-      try {
-        // 1. Prepare files
-        const allFiles: { file: File; bucketName: string }[] = [];
-        if (file) {
-          allFiles.push({ file, bucketName: "assignments" });
-        }
-        for (const audio of audioFiles) {
-          allFiles.push({ file: audio, bucketName: "assignments" });
-        }
+    setIsUploading(true);
+    setUploadProgress({});
 
-        // 2. Request Signed URLs
-        const fileMetadata = allFiles.map(f => ({ fileName: f.file.name, bucketName: f.bucketName }));
-        const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
-        
-        if (signedUrlResult.error) {
-          toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
-          return;
-        }
+    try {
+      // 1. Prepare files
+      const allFiles: { file: File; bucketName: string }[] = [];
+      if (file) {
+        allFiles.push({ file, bucketName: "assignments" });
+      }
+      for (const audio of audioFiles) {
+        allFiles.push({ file: audio, bucketName: "assignments" });
+      }
 
-        const signedUrls = signedUrlResult.data;
-        if (!signedUrls) {
-          toast.error("Upload initialization failed");
-          return;
-        }
+      // 2. Request Signed URLs
+      const fileMetadata = allFiles.map(f => ({ fileName: f.file.name, bucketName: f.bucketName }));
+      const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
+      
+      if (signedUrlResult.error) {
+        toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
+        setIsUploading(false);
+        return;
+      }
 
-        // 3. Upload files directly to Supabase in parallel
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
+      const signedUrls = signedUrlResult.data;
+      if (!signedUrls) {
+        toast.error("Upload initialization failed");
+        setIsUploading(false);
+        return;
+      }
 
-        let fileUrl: string | null = null;
-        const audioUrls: string[] = [];
+      // 3. Upload files directly to Supabase in parallel via XHR for progress tracking
+      let fileUrl: string | null = null;
+      const audioUrls: string[] = [];
 
-        const uploadPromises = allFiles.map(async (f, index) => {
+      const uploadPromises = allFiles.map((f, index) => {
+        return new Promise<void>((resolve, reject) => {
           const { path, token, publicUrl } = signedUrls[index];
+          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/${f.bucketName}/${path}?token=${token}`;
           
-          const { error: uploadError } = await supabase.storage
-            .from(f.bucketName)
-            .uploadToSignedUrl(path, token, f.file);
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", url, true);
+          xhr.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+          xhr.setRequestHeader("Authorization", `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`);
+          xhr.setRequestHeader("Content-Type", f.file.type || "application/octet-stream");
 
-          if (uploadError) {
-            throw new Error(`Failed to upload ${f.file.name}: ${uploadError.message}`);
-          }
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percentage = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress(prev => ({
+                ...prev,
+                [f.file.name]: percentage
+              }));
+            }
+          };
 
-          if (f.file === file) {
-            fileUrl = publicUrl;
-          } else {
-            audioUrls.push(publicUrl);
-          }
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              if (f.file === file) {
+                fileUrl = publicUrl;
+              } else {
+                audioUrls.push(publicUrl);
+              }
+              setUploadProgress(prev => ({ ...prev, [f.file.name]: 100 }));
+              resolve();
+            } else {
+              reject(new Error(`Failed to upload ${f.file.name}: ${xhr.statusText}`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error(`Network error uploading ${f.file.name}`));
+          xhr.send(f.file);
         });
+      });
 
-        await Promise.all(uploadPromises);
+      await Promise.all(uploadPromises);
 
+      // 4. Create assignment
+      startTransition(async () => {
         const createResult = await createAssignment({ title, fileUrl, audioUrls, assigneeIds: selectedStudents });
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
+          setIsUploading(false);
           return;
         }
 
@@ -148,11 +174,15 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         if (fileInput) fileInput.value = '';
         const audioInput = document.getElementById('audio') as HTMLInputElement;
         if (audioInput) audioInput.value = '';
+        
+        setIsUploading(false);
+        setUploadProgress({});
+      });
 
-      } catch (error: any) {
-        toast.error(`Error: ${error.message}`);
-      }
-    });
+    } catch (error: any) {
+      toast.error(`Error: ${error.message}`);
+      setIsUploading(false);
+    }
   };
 
   const handleCopyLink = (id: string) => {
@@ -233,7 +263,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   type="file" 
                   accept=".pdf,image/*"
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  disabled={isPending}
+                  disabled={isPending || isUploading}
                 />
               </div>
               <div className="grid gap-2">
@@ -244,17 +274,39 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   multiple
                   accept="audio/*"
                   onChange={(e) => setAudioFiles(Array.from(e.target.files || []))}
-                  disabled={isPending}
+                  disabled={isPending || isUploading}
                 />
               </div>
               <Button 
                 type="button" 
                 onClick={(e: any) => handleCreateAssignment(e)} 
                 className="w-full md:w-auto" 
-                disabled={isPending}
+                disabled={isPending || isUploading}
               >
-                <Plus className="mr-2 h-4 w-4" /> {isPending ? "Creating..." : "Create Assignment"}
+                <Plus className="mr-2 h-4 w-4" /> {isUploading ? "Uploading..." : isPending ? "Creating..." : "Create Assignment"}
               </Button>
+              
+              {Object.entries(uploadProgress).length > 0 && (
+                <div className="space-y-3 mt-6 p-4 border rounded-md bg-secondary/20">
+                  <p className="text-sm font-medium mb-1 flex items-center">
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Uploading Files...
+                  </p>
+                  {Object.entries(uploadProgress).map(([filename, progress]) => (
+                    <div key={filename} className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span className="truncate max-w-[200px]">{filename}</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-primary h-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
