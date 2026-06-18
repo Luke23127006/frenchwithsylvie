@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
@@ -50,6 +50,23 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+
+  useEffect(() => {
+    if (!isUploading) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      const message = "Files are still uploading. Are you sure you want to leave and cancel the upload?";
+      e.returnValue = message; 
+      return message;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isUploading]);
 
   const handleStudentToggle = (studentId: string) => {
     setSelectedStudents((prev) => 
