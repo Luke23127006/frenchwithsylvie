@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
-import { uploadFile } from "@/lib/actions/storage";
+import { getSignedUploadUrls } from "@/lib/actions/storage";
+import { createClient } from "@supabase/supabase-js";
 import {
   Card,
   CardContent,
@@ -79,35 +80,58 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
     startTransition(async () => {
       try {
-        let fileUrl: string | null = null;
+        // 1. Prepare files
+        const allFiles: { file: File; bucketName: string }[] = [];
         if (file) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("bucketName", "assignments");
-          
-          const uploadResult = await uploadFile(formData);
-          if (uploadResult.error) {
-            toast.error(`Document upload failed: ${uploadResult.error}`);
-            return;
-          }
-          fileUrl = uploadResult.data?.url!;
+          allFiles.push({ file, bucketName: "assignments" });
+        }
+        for (const audio of audioFiles) {
+          allFiles.push({ file: audio, bucketName: "assignments" });
         }
 
-        const audioUrls: string[] = [];
-        for (const audio of audioFiles) {
-          const formData = new FormData();
-          formData.append("file", audio);
-          formData.append("bucketName", "assignments");
-          
-          const uploadResult = await uploadFile(formData);
-          if (uploadResult.error) {
-            toast.error(`Audio upload failed: ${uploadResult.error}`);
-            return;
-          }
-          if (uploadResult.data?.url) {
-            audioUrls.push(uploadResult.data.url);
-          }
+        // 2. Request Signed URLs
+        const fileMetadata = allFiles.map(f => ({ fileName: f.file.name, bucketName: f.bucketName }));
+        const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
+        
+        if (signedUrlResult.error) {
+          toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
+          return;
         }
+
+        const signedUrls = signedUrlResult.data;
+        if (!signedUrls) {
+          toast.error("Upload initialization failed");
+          return;
+        }
+
+        // 3. Upload files directly to Supabase in parallel
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+
+        let fileUrl: string | null = null;
+        const audioUrls: string[] = [];
+
+        const uploadPromises = allFiles.map(async (f, index) => {
+          const { path, token, publicUrl } = signedUrls[index];
+          
+          const { error: uploadError } = await supabase.storage
+            .from(f.bucketName)
+            .uploadToSignedUrl(path, token, f.file);
+
+          if (uploadError) {
+            throw new Error(`Failed to upload ${f.file.name}: ${uploadError.message}`);
+          }
+
+          if (f.file === file) {
+            fileUrl = publicUrl;
+          } else {
+            audioUrls.push(publicUrl);
+          }
+        });
+
+        await Promise.all(uploadPromises);
 
         const createResult = await createAssignment({ title, fileUrl, audioUrls, assigneeIds: selectedStudents });
         if (createResult.error) {
