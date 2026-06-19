@@ -9,13 +9,19 @@ export const createAssignment = createSafeAction(
     title: z.string().min(1),
     fileUrl: z.string().nullable(),
     audioUrls: z.array(z.string()),
+    submissionFormat: z.enum(["document", "audio", "both"]),
     assigneeIds: z.array(z.string()),
   }),
   ["teacher"],
   async ({ input, supabase }) => {
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
-      .insert([{ title: input.title, file_url: input.fileUrl, audio_urls: input.audioUrls }])
+      .insert([{ 
+        title: input.title, 
+        file_url: input.fileUrl, 
+        audio_urls: input.audioUrls,
+        submission_format: input.submissionFormat
+      }])
       .select();
 
     if (assignmentError) throw new Error(assignmentError.message);

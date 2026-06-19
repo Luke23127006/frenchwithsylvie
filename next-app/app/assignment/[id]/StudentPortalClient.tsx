@@ -38,8 +38,15 @@ interface StudentPortalClientProps {
 }
 
 export default function StudentPortalClient({ assignment, existingSubmission }: StudentPortalClientProps) {
-  const [isSubmitted, setIsSubmitted] = useState(!!existingSubmission);
   const [submission, setSubmission] = useState(existingSubmission);
+  
+  const isFullySubmitted = () => {
+    if (!submission) return false;
+    if (assignment.submission_format === 'both') {
+      return !!submission.file_url && !!submission.audio_url;
+    }
+    return true;
+  };
   const [files, setFiles] = useState<File[]>([]);
   const [objectUrls, setObjectUrls] = useState<string[]>([]);
   const [isConverting, setIsConverting] = useState(false);
@@ -52,8 +59,6 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [dropPosition, setDropPosition] = useState<'left' | 'right' | null>(null);
   const [isOverTrash, setIsOverTrash] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  const isAudioAssignment = assignment.audio_urls && assignment.audio_urls.length > 0;
 
   useEffect(() => {
     // Update object URLs whenever files change
@@ -225,7 +230,6 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
         }
 
         setSubmission(submitResult.data?.[0]);
-        setIsSubmitted(true);
       } catch (error: any) {
         toast.error(`Error: ${error.message}`);
       }
@@ -248,7 +252,6 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
         }
 
         setSubmission(null);
-        setIsSubmitted(false);
         setFiles([]);
         setViewMode("assignment");
         toast.success("Submission removed successfully.");
@@ -265,13 +268,13 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+    <div className="h-[calc(100vh-65px)] bg-slate-50 flex flex-col md:flex-row">
       {/* Left/Top Area: Document Viewer (60%) */}
-      <div className="w-full md:w-[60%] border-r bg-white p-4 md:p-8 flex flex-col h-[50vh] md:h-screen">
+      <div className="w-full md:w-[60%] border-r bg-white p-4 md:p-8 flex flex-col h-[50vh] md:h-full">
         <div className="flex justify-between items-start mb-4">
           <div className="flex flex-col gap-3">
             <h1 className="text-2xl font-bold">{assignment.title}</h1>
-            {isSubmitted && submission?.file_url && (
+            {isFullySubmitted() && submission?.file_url && (
               <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
                 <Button 
                   variant={viewMode === "assignment" ? "default" : "ghost"}
@@ -332,26 +335,26 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
       </div>
 
       {/* Right/Bottom Area: Submission Form / Feedback (40%) */}
-      <div className="w-full md:w-[40%] p-4 md:p-8 h-auto md:h-screen md:overflow-y-auto">
-        <div className="max-w-md mx-auto sticky top-8 space-y-6">
-          {!isSubmitted ? (
-            isAudioAssignment ? (
-              <AudioSubmission 
-                assignmentId={assignment.id} 
-                onSuccess={(data) => {
-                  setSubmission(data);
-                  setIsSubmitted(true);
-                }} 
-              />
-            ) : (
-            <Card className="shadow-lg border-t-4 border-t-primary">
-              <CardHeader>
-                <CardTitle className="text-2xl">Submit Your Work</CardTitle>
-                <CardDescription>
-                  Please attach your completed assignment file below.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+      <div className="w-full md:w-[40%] p-4 md:p-8 h-auto md:h-full md:overflow-y-auto">
+        <div className="max-w-md mx-auto space-y-6">
+          {!isFullySubmitted() ? (
+            <div className="space-y-6">
+              {assignment.submission_format === 'both' && (submission?.file_url || submission?.audio_url) && !isFullySubmitted() && (
+                 <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm text-center shadow-sm">
+                   <p className="font-semibold mb-1">Incomplete Submission</p>
+                   You have submitted part of your assignment. Please complete the remaining section to finish.
+                 </div>
+              )}
+
+              {(assignment.submission_format === 'document' || assignment.submission_format === 'both') && !submission?.file_url && (
+                <Card className="shadow-lg border-t-4 border-t-primary">
+                  <CardHeader>
+                    <CardTitle className="text-2xl">Submit Document</CardTitle>
+                    <CardDescription>
+                      Please attach your completed assignment document below.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
                 <Tabs defaultValue="pdf" className="w-full" onValueChange={() => setFiles([])}>
                   <TabsList className="grid w-full grid-cols-2 mb-6">
                     <TabsTrigger value="pdf">Submit PDF</TabsTrigger>
@@ -452,7 +455,17 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                 </Tabs>
               </CardContent>
             </Card>
-            )
+              )}
+
+              {(assignment.submission_format === 'audio' || assignment.submission_format === 'both') && !submission?.audio_url && (
+                <AudioSubmission 
+                  assignmentId={assignment.id} 
+                  onSuccess={(data) => {
+                    setSubmission(data);
+                  }} 
+                />
+              )}
+            </div>
           ) : (
             <>
               <Card className="border-green-200 bg-green-50 text-center py-6 shadow-sm">

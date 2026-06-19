@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw } from "lucide-react";
+import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Mic, FileAudio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
 import { getSignedUploadUrls } from "@/lib/actions/storage";
@@ -44,6 +44,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [audioFiles, setAudioFiles] = useState<File[]>([]);
+  const [submissionFormat, setSubmissionFormat] = useState<"document" | "audio" | "both">("document");
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
@@ -92,8 +93,8 @@ export default function DashboardClient({ assignments, students, trashedAssignme
       return;
     }
 
-    if (!title || (!file && audioFiles.length === 0)) {
-      toast.error("Please provide a title and at least one document or audio file.");
+    if (!title) {
+      toast.error("Please provide a title for the assignment.");
       return;
     }
 
@@ -110,31 +111,32 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         allFiles.push({ file: audio, bucketName: "assignments" });
       }
 
-      // 2. Request Signed URLs
-      const fileMetadata = allFiles.map(f => ({ fileName: f.file.name, bucketName: f.bucketName }));
-      const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
-      
-      if (signedUrlResult.error) {
-        toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
-        setIsUploading(false);
-        return;
-      }
-
-      const signedUrls = signedUrlResult.data;
-      if (!signedUrls) {
-        toast.error("Upload initialization failed");
-        setIsUploading(false);
-        return;
-      }
-
-      // 3. Upload files directly to Supabase in parallel via XHR for progress tracking
+      // 2. Request Signed URLs and Upload if files exist
       let fileUrl: string | null = null;
       const audioUrls: string[] = [];
 
-      const uploadPromises = allFiles.map((f, index) => {
-        return new Promise<void>((resolve, reject) => {
-          const { path, token, publicUrl } = signedUrls[index];
-          const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/${f.bucketName}/${path}?token=${token}`;
+      if (allFiles.length > 0) {
+        const fileMetadata = allFiles.map(f => ({ fileName: f.file.name, bucketName: f.bucketName }));
+        const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
+        
+        if (signedUrlResult.error) {
+          toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
+          setIsUploading(false);
+          return;
+        }
+
+        const signedUrls = signedUrlResult.data;
+        if (!signedUrls) {
+          toast.error("Upload initialization failed");
+          setIsUploading(false);
+          return;
+        }
+
+        // 3. Upload files directly to Supabase in parallel via XHR for progress tracking
+        const uploadPromises = allFiles.map((f, index) => {
+          return new Promise<void>((resolve, reject) => {
+            const { path, token, publicUrl } = signedUrls[index];
+            const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/${f.bucketName}/${path}?token=${token}`;
           
           const xhr = new XMLHttpRequest();
           xhr.open("PUT", url, true);
@@ -170,12 +172,18 @@ export default function DashboardClient({ assignments, students, trashedAssignme
           xhr.send(f.file);
         });
       });
-
       await Promise.all(uploadPromises);
+      }
 
       // 4. Create assignment
       startTransition(async () => {
-        const createResult = await createAssignment({ title, fileUrl, audioUrls, assigneeIds: selectedStudents });
+        const createResult = await createAssignment({ 
+          title, 
+          fileUrl, 
+          audioUrls, 
+          submissionFormat, 
+          assigneeIds: selectedStudents 
+        });
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
           setIsUploading(false);
@@ -186,6 +194,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         setTitle("");
         setFile(null);
         setAudioFiles([]);
+        setSubmissionFormat("document");
         setSelectedStudents([]);
         const fileInput = document.getElementById('document') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
@@ -274,7 +283,56 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="document">Document (PDF/Image) - Optional if audio provided</Label>
+                <Label>Expected Student Submission</Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div 
+                    onClick={() => setSubmissionFormat("document")}
+                    className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
+                      submissionFormat === "document" 
+                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <FileText className={`h-8 w-8 ${submissionFormat === "document" ? "text-blue-600" : "text-slate-400"}`} />
+                    <div>
+                      <div className="font-semibold text-slate-800">Document</div>
+                      <div className="text-xs text-slate-500">PDF or Images</div>
+                    </div>
+                  </div>
+                  
+                  <div 
+                    onClick={() => setSubmissionFormat("audio")}
+                    className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
+                      submissionFormat === "audio" 
+                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Mic className={`h-8 w-8 ${submissionFormat === "audio" ? "text-blue-600" : "text-slate-400"}`} />
+                    <div>
+                      <div className="font-semibold text-slate-800">Audio</div>
+                      <div className="text-xs text-slate-500">Voice recording</div>
+                    </div>
+                  </div>
+
+                  <div 
+                    onClick={() => setSubmissionFormat("both")}
+                    className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
+                      submissionFormat === "both" 
+                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <FileAudio className={`h-8 w-8 ${submissionFormat === "both" ? "text-blue-600" : "text-slate-400"}`} />
+                    <div>
+                      <div className="font-semibold text-slate-800">Both</div>
+                      <div className="text-xs text-slate-500">Document + Audio</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="document">Instruction Material (PDF/Image) - Optional</Label>
                 <Input 
                   id="document" 
                   type="file" 
@@ -284,7 +342,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="audio">Audio Files (Listening Homework)</Label>
+                <Label htmlFor="audio">Reference Audio - Optional</Label>
                 <Input 
                   id="audio" 
                   type="file" 
@@ -423,7 +481,13 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center">
-                          <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
+                          {assignment.submission_format === 'audio' ? (
+                            <Mic className="mr-2 h-4 w-4 text-muted-foreground" />
+                          ) : assignment.submission_format === 'both' ? (
+                            <FileAudio className="mr-2 h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
+                          )}
                           <span className={assignment.is_hidden ? "text-muted-foreground" : ""}>
                             {assignment.title}
                           </span>
@@ -474,7 +538,13 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center text-muted-foreground">
-                          <FileText className="mr-2 h-4 w-4" />
+                          {assignment.submission_format === 'audio' ? (
+                            <Mic className="mr-2 h-4 w-4" />
+                          ) : assignment.submission_format === 'both' ? (
+                            <FileAudio className="mr-2 h-4 w-4" />
+                          ) : (
+                            <FileText className="mr-2 h-4 w-4" />
+                          )}
                           <span className="line-through">{assignment.title}</span>
                         </div>
                       </TableCell>
