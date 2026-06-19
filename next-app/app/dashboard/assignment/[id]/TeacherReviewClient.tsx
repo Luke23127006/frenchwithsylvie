@@ -48,7 +48,7 @@ interface TeacherReviewClientProps {
     title: string;
     file_url: string | null;
     audio_urls?: string[];
-    submission_format: 'document' | 'audio' | 'both';
+    submission_format: 'DOCUMENT' | 'AUDIO' | 'BOTH';
     created_at: string;
     assignees: Assignee[];
   };

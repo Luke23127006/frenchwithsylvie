@@ -44,7 +44,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [audioFiles, setAudioFiles] = useState<File[]>([]);
-  const [submissionFormat, setSubmissionFormat] = useState<"document" | "audio" | "both">("document");
+  const [submissionFormat, setSubmissionFormat] = useState<"DOCUMENT" | "AUDIO" | "BOTH">("DOCUMENT");
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
@@ -288,12 +288,12 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   <div 
                     onClick={() => setSubmissionFormat("document")}
                     className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
-                      submissionFormat === "document" 
+                      submissionFormat === "DOCUMENT" 
                         ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
                         : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <FileText className={`h-8 w-8 ${submissionFormat === "document" ? "text-blue-600" : "text-slate-400"}`} />
+                    <FileText className={`h-8 w-8 ${submissionFormat === "DOCUMENT" ? "text-blue-600" : "text-slate-400"}`} />
                     <div>
                       <div className="font-semibold text-slate-800">Document</div>
                       <div className="text-xs text-slate-500">PDF or Images</div>
@@ -301,14 +301,14 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   </div>
                   
                   <div 
-                    onClick={() => setSubmissionFormat("audio")}
+                    onClick={() => setSubmissionFormat("AUDIO")}
                     className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
-                      submissionFormat === "audio" 
+                      submissionFormat === "AUDIO" 
                         ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
                         : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <Mic className={`h-8 w-8 ${submissionFormat === "audio" ? "text-blue-600" : "text-slate-400"}`} />
+                    <Mic className={`h-8 w-8 ${submissionFormat === "AUDIO" ? "text-blue-600" : "text-slate-400"}`} />
                     <div>
                       <div className="font-semibold text-slate-800">Audio</div>
                       <div className="text-xs text-slate-500">Voice recording</div>
@@ -316,14 +316,14 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   </div>
 
                   <div 
-                    onClick={() => setSubmissionFormat("both")}
+                    onClick={() => setSubmissionFormat("BOTH")}
                     className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
-                      submissionFormat === "both" 
+                      submissionFormat === "BOTH" 
                         ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
                         : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <FileAudio className={`h-8 w-8 ${submissionFormat === "both" ? "text-blue-600" : "text-slate-400"}`} />
+                    <FileAudio className={`h-8 w-8 ${submissionFormat === "BOTH" ? "text-blue-600" : "text-slate-400"}`} />
                     <div>
                       <div className="font-semibold text-slate-800">Both</div>
                       <div className="text-xs text-slate-500">Document + Audio</div>
@@ -481,9 +481,9 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center">
-                          {assignment.submission_format === 'audio' ? (
+                          {assignment.submission_format === 'AUDIO' ? (
                             <Mic className="mr-2 h-4 w-4 text-muted-foreground" />
-                          ) : assignment.submission_format === 'both' ? (
+                          ) : assignment.submission_format === 'BOTH' ? (
                             <FileAudio className="mr-2 h-4 w-4 text-muted-foreground" />
                           ) : (
                             <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -538,9 +538,9 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center text-muted-foreground">
-                          {assignment.submission_format === 'audio' ? (
+                          {assignment.submission_format === 'AUDIO' ? (
                             <Mic className="mr-2 h-4 w-4" />
-                          ) : assignment.submission_format === 'both' ? (
+                          ) : assignment.submission_format === 'BOTH' ? (
                             <FileAudio className="mr-2 h-4 w-4" />
                           ) : (
                             <FileText className="mr-2 h-4 w-4" />

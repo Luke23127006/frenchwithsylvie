@@ -117,9 +117,9 @@ export default function StudentDashboardClient({ assignments }: StudentDashboard
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    {assignment.submission_format === 'audio' ? (
+                    {assignment.submission_format === 'AUDIO' ? (
                       <Mic className={`h-5 w-5 ${isSubmitted ? 'text-green-600' : 'text-primary'}`} />
-                    ) : assignment.submission_format === 'both' ? (
+                    ) : assignment.submission_format === 'BOTH' ? (
                       <FileAudio className={`h-5 w-5 ${isSubmitted ? 'text-green-600' : 'text-primary'}`} />
                     ) : (
                       <FileText className={`h-5 w-5 ${isSubmitted ? 'text-green-600' : 'text-primary'}`} />
@@ -136,8 +136,8 @@ export default function StudentDashboardClient({ assignments }: StudentDashboard
                 <CardDescription className="flex items-center justify-between mt-2">
                   <span>Posted on {new Date(assignment.created_at).toLocaleDateString()}</span>
                   <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md border">
-                    {assignment.submission_format === 'audio' ? 'Speaking task' : 
-                     assignment.submission_format === 'both' ? 'Document & Speaking' : 'Document task'}
+                    {assignment.submission_format === 'AUDIO' ? 'Speaking task' : 
+                     assignment.submission_format === 'BOTH' ? 'Document & Speaking' : 'Document task'}
                   </span>
                 </CardDescription>
               </CardHeader>

@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 
 interface FormatBadgeEditorProps {
   assignmentId: string;
-  currentFormat: 'document' | 'audio' | 'both';
+  currentFormat: 'DOCUMENT' | 'AUDIO' | 'BOTH';
   hasSubmissions: boolean;
 }
 
@@ -23,17 +23,17 @@ export default function FormatBadgeEditor({ assignmentId, currentFormat, hasSubm
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const getFormatDetails = (format: 'document' | 'audio' | 'both') => {
+  const getFormatDetails = (format: 'DOCUMENT' | 'AUDIO' | 'BOTH') => {
     switch (format) {
-      case 'audio': return { icon: Mic, label: 'Audio Only', color: 'text-indigo-600 bg-indigo-50 border-indigo-200 hover:bg-indigo-100' };
-      case 'both': return { icon: FileAudio, label: 'Document + Audio', color: 'text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200 hover:bg-fuchsia-100' };
+      case 'AUDIO': return { icon: Mic, label: 'Audio Only', color: 'text-indigo-600 bg-indigo-50 border-indigo-200 hover:bg-indigo-100' };
+      case 'BOTH': return { icon: FileAudio, label: 'Document + Audio', color: 'text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200 hover:bg-fuchsia-100' };
       default: return { icon: FileText, label: 'Document Only', color: 'text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100' };
     }
   };
 
   const { icon: Icon, label, color } = getFormatDetails(currentFormat);
 
-  const handleSelect = (newFormat: 'document' | 'audio' | 'both') => {
+  const handleSelect = (newFormat: 'DOCUMENT' | 'AUDIO' | 'BOTH') => {
     if (newFormat === currentFormat || hasSubmissions) return;
 
     startTransition(async () => {
@@ -80,19 +80,19 @@ export default function FormatBadgeEditor({ assignmentId, currentFormat, hasSubm
           )}
         </SelectTrigger>
         <SelectContent position="popper" side="bottom" sideOffset={4}>
-          <SelectItem value="document" className="cursor-pointer">
+          <SelectItem value="DOCUMENT" className="cursor-pointer">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-blue-600" />
               <span>Document Only</span>
             </div>
           </SelectItem>
-          <SelectItem value="audio" className="cursor-pointer">
+          <SelectItem value="AUDIO" className="cursor-pointer">
             <div className="flex items-center gap-2">
               <Mic className="w-4 h-4 text-indigo-600" />
               <span>Audio Only</span>
             </div>
           </SelectItem>
-          <SelectItem value="both" className="cursor-pointer">
+          <SelectItem value="BOTH" className="cursor-pointer">
             <div className="flex items-center gap-2">
               <FileAudio className="w-4 h-4 text-fuchsia-600" />
               <span>Document + Audio</span>

@@ -42,7 +42,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   
   const isFullySubmitted = () => {
     if (!submission) return false;
-    if (assignment.submission_format === 'both') {
+    if (assignment.submission_format === 'BOTH') {
       return !!submission.file_url && !!submission.audio_url;
     }
     return true;
@@ -339,14 +339,14 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
         <div className="max-w-md mx-auto space-y-6">
           {!isFullySubmitted() ? (
             <div className="space-y-6">
-              {assignment.submission_format === 'both' && (submission?.file_url || submission?.audio_url) && !isFullySubmitted() && (
+              {assignment.submission_format === 'BOTH' && (submission?.file_url || submission?.audio_url) && !isFullySubmitted() && (
                  <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm text-center shadow-sm">
                    <p className="font-semibold mb-1">Incomplete Submission</p>
                    You have submitted part of your assignment. Please complete the remaining section to finish.
                  </div>
               )}
 
-              {(assignment.submission_format === 'document' || assignment.submission_format === 'both') && !submission?.file_url && (
+              {(assignment.submission_format === 'DOCUMENT' || assignment.submission_format === 'BOTH') && !submission?.file_url && (
                 <Card className="shadow-lg border-t-4 border-t-primary">
                   <CardHeader>
                     <CardTitle className="text-2xl">Submit Document</CardTitle>
@@ -457,7 +457,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
             </Card>
               )}
 
-              {(assignment.submission_format === 'audio' || assignment.submission_format === 'both') && !submission?.audio_url && (
+              {(assignment.submission_format === 'AUDIO' || assignment.submission_format === 'BOTH') && !submission?.audio_url && (
                 <AudioSubmission 
                   assignmentId={assignment.id} 
                   onSuccess={(data) => {

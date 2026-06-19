@@ -9,7 +9,7 @@ export const createAssignment = createSafeAction(
     title: z.string().min(1),
     fileUrl: z.string().nullable(),
     audioUrls: z.array(z.string()),
-    submissionFormat: z.enum(["document", "audio", "both"]),
+    submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"]),
     assigneeIds: z.array(z.string()),
   }),
   ["teacher"],
@@ -219,7 +219,7 @@ export const updateAssignmentTitle = createSafeAction(
 export const updateAssignmentFormat = createSafeAction(
   z.object({
     assignmentId: z.string(),
-    submissionFormat: z.enum(["document", "audio", "both"])
+    submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"])
   }),
   ["teacher"],
   async ({ input, supabase }) => {
