@@ -30,6 +30,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
+import AudioSubmission from "./AudioSubmission";
 
 interface StudentPortalClientProps {
   assignment: any;
@@ -51,6 +52,8 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [dropPosition, setDropPosition] = useState<'left' | 'right' | null>(null);
   const [isOverTrash, setIsOverTrash] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const isAudioAssignment = assignment.audio_urls && assignment.audio_urls.length > 0;
 
   useEffect(() => {
     // Update object URLs whenever files change
@@ -332,6 +335,15 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
       <div className="w-full md:w-[40%] p-4 md:p-8 h-auto md:h-screen md:overflow-y-auto">
         <div className="max-w-md mx-auto sticky top-8 space-y-6">
           {!isSubmitted ? (
+            isAudioAssignment ? (
+              <AudioSubmission 
+                assignmentId={assignment.id} 
+                onSuccess={(data) => {
+                  setSubmission(data);
+                  setIsSubmitted(true);
+                }} 
+              />
+            ) : (
             <Card className="shadow-lg border-t-4 border-t-primary">
               <CardHeader>
                 <CardTitle className="text-2xl">Submit Your Work</CardTitle>
@@ -440,6 +452,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                 </Tabs>
               </CardContent>
             </Card>
+            )
           ) : (
             <>
               <Card className="border-green-200 bg-green-50 text-center py-6 shadow-sm">
