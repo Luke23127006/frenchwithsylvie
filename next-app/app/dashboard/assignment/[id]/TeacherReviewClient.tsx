@@ -29,6 +29,7 @@ import { updateAssignees, updateAssignmentTitle } from "@/lib/actions/assignment
 import { gradeSubmission } from "@/lib/actions/submissions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { getRatingInfo } from "@/lib/utils";
+import FormatBadgeEditor from "@/components/FormatBadgeEditor";
 
 interface Student {
   id: string;
@@ -47,6 +48,7 @@ interface TeacherReviewClientProps {
     title: string;
     file_url: string | null;
     audio_urls?: string[];
+    submission_format: 'document' | 'audio' | 'both';
     created_at: string;
     assignees: Assignee[];
   };
@@ -231,9 +233,16 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                 </Button>
               </div>
             )}
-            <p className="text-muted-foreground">
-              Created on {new Date(assignmentData.created_at).toLocaleDateString()}
-            </p>
+            <div className="flex items-center gap-3 mt-2 text-muted-foreground">
+              <FormatBadgeEditor 
+                assignmentId={assignmentData.id}
+                currentFormat={assignmentData.submission_format}
+                hasSubmissions={assignmentData.assignees.some(a => a.has_submitted)}
+              />
+              <span className="text-sm border-l pl-3">
+                Created on {new Date(assignmentData.created_at).toLocaleDateString()}
+              </span>
+            </div>
           </div>
         </div>
         

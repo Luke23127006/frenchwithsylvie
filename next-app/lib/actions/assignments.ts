@@ -216,6 +216,39 @@ export const updateAssignmentTitle = createSafeAction(
   }
 );
 
+export const updateAssignmentFormat = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    submissionFormat: z.enum(["document", "audio", "both"])
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    // Check if there are any submissions
+    const { count, error: countError } = await supabase
+      .from("submissions")
+      .select("*", { count: "exact", head: true })
+      .eq("assignment_id", input.assignmentId);
+
+    if (countError) throw new Error(countError.message);
+
+    if (count && count > 0) {
+      throw new Error("Cannot change format because submissions already exist.");
+    }
+
+    const { data, error } = await supabase
+      .from("assignments")
+      .update({ submission_format: input.submissionFormat })
+      .eq("id", input.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
+    return data;
+  }
+);
+
 export const toggleHideAssignment = createSafeAction(
   z.object({
     assignmentId: z.string(),
