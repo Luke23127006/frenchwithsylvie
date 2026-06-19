@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useRef } from "react";
-import { Upload, CheckCircle2, GraduationCap, FileText, ArrowLeft, ArrowRight, ImagePlus } from "lucide-react";
+import { Upload, CheckCircle2, GraduationCap, FileText, ArrowLeft, ArrowRight, ImagePlus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { uploadFile } from "@/lib/actions/storage";
+import { getSignedUploadUrls } from "@/lib/actions/storage";
 import { submitSolution, removeSubmission } from "@/lib/actions/submissions";
 import toast from "react-hot-toast";
 import DOMPurify from "isomorphic-dompurify";
@@ -50,6 +50,8 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [files, setFiles] = useState<File[]>([]);
   const [objectUrls, setObjectUrls] = useState<string[]>([]);
   const [isConverting, setIsConverting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +61,23 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [dropPosition, setDropPosition] = useState<'left' | 'right' | null>(null);
   const [isOverTrash, setIsOverTrash] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isUploading) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      const message = "Files are still uploading. Are you sure you want to leave and cancel the upload?";
+      e.returnValue = message; 
+      return message;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isUploading]);
 
   useEffect(() => {
     // Update object URLs whenever files change
@@ -190,6 +209,9 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
       return;
     }
 
+    setIsUploading(true);
+    setUploadProgress({});
+
     startTransition(async () => {
       try {
         let finalFile: File;
@@ -197,6 +219,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
         if (type === 'pdf') {
           if (files[0].type !== 'application/pdf') {
             toast.error("Please select a valid PDF file.");
+            setIsUploading(false);
             return;
           }
           finalFile = files[0];
@@ -205,6 +228,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           const hasNonImage = files.some(f => !f.type.startsWith('image/'));
           if (hasNonImage) {
             toast.error("Please select only image files.");
+            setIsUploading(false);
             return;
           }
           setIsConverting(true);
@@ -212,26 +236,58 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           setIsConverting(false);
         }
 
-        const formData = new FormData();
-        formData.append("file", finalFile);
-        formData.append("bucketName", "submissions");
+        // 1. Get Signed URL
+        const fileMetadata = [{ fileName: finalFile.name, bucketName: "submissions" }];
+        const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
         
-        const uploadResult = await uploadFile(formData);
-        if (uploadResult.error) {
-          toast.error(`Upload failed: ${uploadResult.error}`);
+        if (signedUrlResult.error || !signedUrlResult.data) {
+          toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
+          setIsUploading(false);
           return;
         }
 
-        const fileUrl = uploadResult.data?.url!;
-        const submitResult = await submitSolution({ assignmentId: assignment.id, fileUrl });
+        const { path, token, publicUrl } = signedUrlResult.data[0];
+        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/submissions/${path}?token=${token}`;
+
+        // 2. Upload via XHR
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", url, true);
+          xhr.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+          xhr.setRequestHeader("Authorization", `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`);
+          xhr.setRequestHeader("Content-Type", finalFile.type || "application/pdf");
+
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percentage = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress({ [finalFile.name]: percentage });
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              setUploadProgress({ [finalFile.name]: 100 });
+              resolve();
+            } else {
+              reject(new Error(`Failed to upload ${finalFile.name}: ${xhr.statusText}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error(`Network error uploading ${finalFile.name}`));
+          xhr.send(finalFile);
+        });
+
+        const submitResult = await submitSolution({ assignmentId: assignment.id, fileUrl: publicUrl });
         if (submitResult.error) {
           toast.error(`Submission failed: ${submitResult.error}`);
+          setIsUploading(false);
           return;
         }
 
         setSubmission(submitResult.data?.[0]);
+        setIsUploading(false);
       } catch (error: any) {
         toast.error(`Error: ${error.message}`);
+        setIsUploading(false);
       }
     });
   };
@@ -388,14 +444,37 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                         />
                       </div>
                       <div className="flex w-full gap-4">
-                        <Button type="submit" className="w-full text-lg h-12" disabled={isPending || isConverting}>
-                          {isPending ? (
+                        <Button type="submit" className="w-full text-lg h-12" disabled={isPending || isConverting || isUploading}>
+                          {isUploading ? (
                             "Uploading..."
+                          ) : isPending ? (
+                            "Submitting..."
                           ) : (
                             <><Upload className="mr-2 h-5 w-5" /> Submit</>
                           )}
                         </Button>
                       </div>
+                      {Object.entries(uploadProgress).length > 0 && (
+                        <div className="space-y-3 mt-4 p-4 border rounded-md bg-secondary/20">
+                          <p className="text-sm font-medium mb-1 flex items-center">
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Uploading Document...
+                          </p>
+                          {Object.entries(uploadProgress).map(([filename, progress]) => (
+                            <div key={filename} className="space-y-1.5">
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span className="truncate max-w-[200px]">{filename}</span>
+                                <span>{progress}%</span>
+                              </div>
+                              <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-primary h-full transition-all duration-300"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </form>
                   </TabsContent>
                   
@@ -447,18 +526,41 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                         <Button 
                           type="button"
                           className="w-full text-lg h-12" 
-                          disabled={isPending || isConverting || files.length === 0}
+                          disabled={isPending || isConverting || isUploading || files.length === 0}
                           onClick={() => setIsPreviewModalOpen(true)}
                         >
                           {isConverting ? (
                             "Converting images to PDF..."
-                          ) : isPending ? (
+                          ) : isUploading ? (
                             "Uploading..."
+                          ) : isPending ? (
+                            "Submitting..."
                           ) : (
                             <><CheckCircle2 className="mr-2 h-5 w-5" /> Submit {files.length ? `${files.length} Image${files.length !== 1 ? 's' : ''}` : ''}</>
                           )}
                         </Button>
                       </div>
+                      {Object.entries(uploadProgress).length > 0 && (
+                        <div className="space-y-3 mt-4 p-4 border rounded-md bg-secondary/20">
+                          <p className="text-sm font-medium mb-1 flex items-center">
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Uploading Document...
+                          </p>
+                          {Object.entries(uploadProgress).map(([filename, progress]) => (
+                            <div key={filename} className="space-y-1.5">
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span className="truncate max-w-[200px]">{filename}</span>
+                                <span>{progress}%</span>
+                              </div>
+                              <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className="bg-primary h-full transition-all duration-300"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>
@@ -659,9 +761,9 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                   setIsPreviewModalOpen(false);
                   handleSubmit(e, 'images');
                 }}
-                disabled={isPending || isConverting || files.length === 0}
+                disabled={isPending || isConverting || isUploading || files.length === 0}
               >
-                {isConverting ? "Converting..." : isPending ? "Uploading..." : "Confirm & Submit"}
+                {isConverting ? "Converting..." : isUploading ? "Uploading..." : isPending ? "Submitting..." : "Confirm & Submit"}
               </Button>
             </div>
           </DialogFooter>
