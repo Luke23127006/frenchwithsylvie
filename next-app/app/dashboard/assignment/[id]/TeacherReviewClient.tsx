@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save, Pencil, X, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, FileText, Search, UserMinus, Save, Pencil, X, Trash2, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,6 +29,7 @@ import { updateAssignees, updateAssignmentTitle } from "@/lib/actions/assignment
 import { gradeSubmission } from "@/lib/actions/submissions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { getRatingInfo } from "@/lib/utils";
+import FormatBadgeEditor from "@/components/FormatBadgeEditor";
 
 interface Student {
   id: string;
@@ -47,6 +48,7 @@ interface TeacherReviewClientProps {
     title: string;
     file_url: string | null;
     audio_urls?: string[];
+    submission_format: 'DOCUMENT' | 'AUDIO' | 'BOTH';
     created_at: string;
     assignees: Assignee[];
   };
@@ -231,9 +233,16 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                 </Button>
               </div>
             )}
-            <p className="text-muted-foreground">
-              Created on {new Date(assignmentData.created_at).toLocaleDateString()}
-            </p>
+            <div className="flex items-center gap-3 mt-2 text-muted-foreground">
+              <FormatBadgeEditor 
+                assignmentId={assignmentData.id}
+                currentFormat={assignmentData.submission_format}
+                hasSubmissions={assignmentData.assignees.some(a => a.has_submitted)}
+              />
+              <span className="text-sm border-l pl-3">
+                Created on {new Date(assignmentData.created_at).toLocaleDateString()}
+              </span>
+            </div>
           </div>
         </div>
         
@@ -386,20 +395,37 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                         </CardDescription>
                       </div>
                       <Button variant="outline" size="sm" asChild>
-                        <a href={selectedAssignee.submission.file_url} target="_blank" rel="noopener noreferrer">
+                        <a href={selectedAssignee.submission.file_url || selectedAssignee.submission.audio_url} target="_blank" rel="noopener noreferrer">
                           Open Original
                         </a>
                       </Button>
                     </div>
                   </CardHeader>
-                  <div className="flex-1 bg-slate-100/50 p-4">
-                    <div className="w-full h-full bg-white rounded-lg border shadow-sm overflow-hidden relative">
-                      <iframe 
-                        src={selectedAssignee.submission.file_url} 
-                        className="absolute inset-0 w-full h-full"
-                        title={`${selectedAssignee.full_name} submission`}
-                      />
-                    </div>
+                  <div className="flex-1 bg-slate-100/50 p-4 flex flex-col gap-4 overflow-y-auto">
+                    {selectedAssignee.submission.file_url && (
+                      <div className="w-full h-full min-h-[500px] bg-white rounded-lg border shadow-sm overflow-hidden relative">
+                        <iframe 
+                          src={selectedAssignee.submission.file_url} 
+                          className="absolute inset-0 w-full h-full"
+                          title={`${selectedAssignee.full_name} document submission`}
+                        />
+                      </div>
+                    )}
+                    {selectedAssignee.submission.audio_url && (
+                      <Card className="flex-shrink-0">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Mic className="h-5 w-5 text-indigo-600" />
+                            Audio Submission
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <audio controls className="w-full h-12" src={selectedAssignee.submission.audio_url}>
+                            Your browser does not support the audio element.
+                          </audio>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 </>
               ) : (

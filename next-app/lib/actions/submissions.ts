@@ -7,19 +7,48 @@ import { z } from "zod";
 export const submitSolution = createSafeAction(
   z.object({
     assignmentId: z.string(),
-    fileUrl: z.string()
+    fileUrl: z.string().optional().nullable(),
+    audioUrl: z.string().optional().nullable()
+  }).refine(data => data.fileUrl || data.audioUrl, {
+    message: "Either fileUrl or audioUrl must be provided"
   }),
   ["student"],
   async ({ input, user, supabase }) => {
-    const { data, error } = await supabase
+    const { data: existing } = await supabase
       .from("submissions")
-      .insert([{ 
-        assignment_id: input.assignmentId, 
-        student_id: user.id,
-        student_name: user.full_name,
-        file_url: input.fileUrl 
-      }])
-      .select();
+      .select("id, file_url, audio_url")
+      .eq("assignment_id", input.assignmentId)
+      .eq("student_id", user.id)
+      .maybeSingle();
+
+    let data, error;
+
+    if (existing) {
+      const updatePayload: any = {};
+      if (input.fileUrl !== undefined) updatePayload.file_url = input.fileUrl;
+      if (input.audioUrl !== undefined) updatePayload.audio_url = input.audioUrl;
+      
+      const result = await supabase
+        .from("submissions")
+        .update(updatePayload)
+        .eq("id", existing.id)
+        .select();
+      data = result.data;
+      error = result.error;
+    } else {
+      const result = await supabase
+        .from("submissions")
+        .insert([{ 
+          assignment_id: input.assignmentId, 
+          student_id: user.id,
+          student_name: user.full_name,
+          file_url: input.fileUrl,
+          audio_url: input.audioUrl
+        }])
+        .select();
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) throw new Error(error.message);
 

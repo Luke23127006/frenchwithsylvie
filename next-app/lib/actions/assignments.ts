@@ -9,13 +9,19 @@ export const createAssignment = createSafeAction(
     title: z.string().min(1),
     fileUrl: z.string().nullable(),
     audioUrls: z.array(z.string()),
+    submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"]),
     assigneeIds: z.array(z.string()),
   }),
   ["teacher"],
   async ({ input, supabase }) => {
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
-      .insert([{ title: input.title, file_url: input.fileUrl, audio_urls: input.audioUrls }])
+      .insert([{ 
+        title: input.title, 
+        file_url: input.fileUrl, 
+        audio_urls: input.audioUrls,
+        submission_format: input.submissionFormat
+      }])
       .select();
 
     if (assignmentError) throw new Error(assignmentError.message);
@@ -206,6 +212,39 @@ export const updateAssignmentTitle = createSafeAction(
 
     revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
     revalidatePath(`/dashboard`);
+    return data;
+  }
+);
+
+export const updateAssignmentFormat = createSafeAction(
+  z.object({
+    assignmentId: z.string(),
+    submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"])
+  }),
+  ["teacher"],
+  async ({ input, supabase }) => {
+    // Check if there are any submissions
+    const { count, error: countError } = await supabase
+      .from("submissions")
+      .select("*", { count: "exact", head: true })
+      .eq("assignment_id", input.assignmentId);
+
+    if (countError) throw new Error(countError.message);
+
+    if (count && count > 0) {
+      throw new Error("Cannot change format because submissions already exist.");
+    }
+
+    const { data, error } = await supabase
+      .from("assignments")
+      .update({ submission_format: input.submissionFormat })
+      .eq("id", input.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
     return data;
   }
 );
