@@ -1,0 +1,4 @@
+--- StudentPortalPage ---
+id: 921aaf11-5dca-4563-b6a3-41d35b3f4105
+result: {"data":{"id":"921aaf11-5dca-4563-b6a3-41d35b3f4105","title":"123","file_url":"http://127.0.0.1:54321/storage/v1/object/public/assignments/1781803559304-q5p8mb2.pdf","created_by":null,"created_at":"2026-06-18T17:26:02.931939+00:00","is_hidden":false,"deleted_at":null,"audio_urls":["http://127.0.0.1:54321/storage/v1/object/public/assignments/1781803559305-a4td0l9.mp3"]}}
+Assignment data: {"id":"921aaf11-5dca-4563-b6a3-41d35b3f4105","title":"123","file_url":"http://127.0.0.1:54321/storage/v1/object/public/assignments/1781803559304-q5p8mb2.pdf","created_by":null,"created_at":"2026-06-18T17:26:02.931939+00:00","is_hidden":false,"deleted_at":null,"audio_urls":["http://127.0.0.1:54321/storage/v1/object/public/assignments/1781803559305-a4td0l9.mp3"]}
