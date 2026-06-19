@@ -194,7 +194,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         setTitle("");
         setFile(null);
         setAudioFiles([]);
-        setSubmissionFormat("document");
+        setSubmissionFormat("DOCUMENT");
         setSelectedStudents([]);
         const fileInput = document.getElementById('document') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
@@ -286,7 +286,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                 <Label>Expected Student Submission</Label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div 
-                    onClick={() => setSubmissionFormat("document")}
+                    onClick={() => setSubmissionFormat("DOCUMENT")}
                     className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
                       submissionFormat === "DOCUMENT" 
                         ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 

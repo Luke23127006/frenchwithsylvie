@@ -274,7 +274,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
         <div className="flex justify-between items-start mb-4">
           <div className="flex flex-col gap-3">
             <h1 className="text-2xl font-bold">{assignment.title}</h1>
-            {isFullySubmitted() && submission?.file_url && (
+            {isFullySubmitted() && (submission?.file_url || submission?.audio_url) && (
               <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
                 <Button 
                   variant={viewMode === "assignment" ? "default" : "ghost"}
@@ -318,6 +318,15 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           </div>
         )}
 
+        {viewMode === "submission" && submission?.audio_url && (
+          <div className="mb-4 space-y-3">
+            <h3 className="font-semibold text-slate-700">My Speaking Audio</h3>
+            <audio controls className="w-full h-10" src={submission.audio_url}>
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        )}
+
         <div className="flex-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative">
           {(viewMode === "assignment" ? assignment.file_url : submission?.file_url) ? (
             <iframe 
@@ -328,7 +337,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           ) : (
             <div className="text-muted-foreground flex flex-col items-center p-8 text-center">
               <FileText className="h-16 w-16 mb-4 opacity-20" />
-              <p>No document provided for this assignment.</p>
+              <p>No document provided for this {viewMode}.</p>
             </div>
           )}
         </div>
