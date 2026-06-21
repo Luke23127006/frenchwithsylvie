@@ -38,7 +38,7 @@ export default async function Header() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <NotificationSettings initialSettings={settings} />
+            <NotificationSettings initialSettings={settings} isTeacher={payload.role === 'teacher'} />
             <ChangePasswordModal />
             <form action={logout}>
               <Button variant="outline" size="sm" type="submit">

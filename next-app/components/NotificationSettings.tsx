@@ -14,13 +14,15 @@ export type NotificationSettingsData = {
   notify_new_assignment: boolean;
   notify_assignment_graded: boolean;
   notify_deadline_reminder: boolean;
+  notify_submission_received: boolean;
 };
 
 interface NotificationSettingsProps {
   initialSettings: NotificationSettingsData | null;
+  isTeacher?: boolean;
 }
 
-export default function NotificationSettings({ initialSettings }: NotificationSettingsProps) {
+export default function NotificationSettings({ initialSettings, isTeacher }: NotificationSettingsProps) {
   const [isPending, startTransition] = useTransition();
 
   const [optimisticSettings, setOptimisticSettings] = useOptimistic(
@@ -29,6 +31,7 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
       notify_new_assignment: true,
       notify_assignment_graded: true,
       notify_deadline_reminder: true,
+      notify_submission_received: true,
     },
     (state, newSettings: Partial<NotificationSettingsData>) => ({ ...state, ...newSettings })
   );
@@ -146,43 +149,60 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-new" className="flex flex-col space-y-1 items-start text-left">
-                    <span>New Assignments</span>
-                    <span className="font-normal text-xs text-muted-foreground">When you receive new homework.</span>
-                  </Label>
-                  <Switch
-                    id="notify-new"
-                    checked={optimisticSettings.notify_new_assignment}
-                    onCheckedChange={(checked) => handleToggle('notify_new_assignment', checked)}
-                    disabled={isPending}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-graded" className="flex flex-col space-y-1 items-start text-left">
-                    <span>Grades & Feedback</span>
-                    <span className="font-normal text-xs text-muted-foreground">When your teacher grades your work.</span>
-                  </Label>
-                  <Switch
-                    id="notify-graded"
-                    checked={optimisticSettings.notify_assignment_graded}
-                    onCheckedChange={(checked) => handleToggle('notify_assignment_graded', checked)}
-                    disabled={isPending}
-                  />
-                </div>
+                {isTeacher ? (
+                  <div className="flex items-center justify-between space-x-2">
+                    <Label htmlFor="notify-submissions" className="flex flex-col space-y-1 items-start text-left">
+                      <span>Student Submissions</span>
+                      <span className="font-normal text-xs text-muted-foreground">When a student completes an assignment.</span>
+                    </Label>
+                    <Switch
+                      id="notify-submissions"
+                      checked={optimisticSettings.notify_submission_received}
+                      onCheckedChange={(checked) => handleToggle('notify_submission_received', checked)}
+                      disabled={isPending}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between space-x-2">
+                      <Label htmlFor="notify-new" className="flex flex-col space-y-1 items-start text-left">
+                        <span>New Assignments</span>
+                        <span className="font-normal text-xs text-muted-foreground">When you receive new homework.</span>
+                      </Label>
+                      <Switch
+                        id="notify-new"
+                        checked={optimisticSettings.notify_new_assignment}
+                        onCheckedChange={(checked) => handleToggle('notify_new_assignment', checked)}
+                        disabled={isPending}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between space-x-2">
+                      <Label htmlFor="notify-graded" className="flex flex-col space-y-1 items-start text-left">
+                        <span>Grades & Feedback</span>
+                        <span className="font-normal text-xs text-muted-foreground">When your teacher grades your work.</span>
+                      </Label>
+                      <Switch
+                        id="notify-graded"
+                        checked={optimisticSettings.notify_assignment_graded}
+                        onCheckedChange={(checked) => handleToggle('notify_assignment_graded', checked)}
+                        disabled={isPending}
+                      />
+                    </div>
 
-                <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-deadline" className="flex flex-col space-y-1 items-start text-left text-muted-foreground">
-                    <span>Deadline Reminders</span>
-                    <span className="font-normal text-xs text-muted-foreground">Coming soon.</span>
-                  </Label>
-                  <Switch
-                    id="notify-deadline"
-                    checked={false}
-                    disabled={true}
-                  />
-                </div>
+                    <div className="flex items-center justify-between space-x-2">
+                      <Label htmlFor="notify-deadline" className="flex flex-col space-y-1 items-start text-left text-muted-foreground">
+                        <span>Deadline Reminders</span>
+                        <span className="font-normal text-xs text-muted-foreground">Coming soon.</span>
+                      </Label>
+                      <Switch
+                        id="notify-deadline"
+                        checked={false}
+                        disabled={true}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

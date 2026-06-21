@@ -23,7 +23,8 @@ export const createAssignment = createSafeAction(
         title: input.title, 
         file_url: input.fileUrl, 
         audio_urls: input.audioUrls,
-        submission_format: input.submissionFormat
+        submission_format: input.submissionFormat,
+        created_by: user.id
       }])
       .select();
 
