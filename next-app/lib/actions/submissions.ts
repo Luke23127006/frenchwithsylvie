@@ -132,9 +132,10 @@ export const gradeSubmission = createSafeAction(
               const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
               const assignmentLink = `${baseUrl}/assignment/${data.assignment_id}`;
               const assignmentTitle = Array.isArray(data.assignments) ? data.assignments[0]?.title : data.assignments?.title;
+              const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
               await resend.emails.send({
-                from: 'onboarding@resend.dev',
+                from: fromEmail,
                 to: email,
                 subject: `Assignment Graded: ${assignmentTitle || 'Your Assignment'}`,
                 react: React.createElement(AssignmentGradedEmail, {

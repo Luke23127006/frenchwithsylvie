@@ -79,8 +79,10 @@ export const createAssignment = createSafeAction(
                 const email = settings?.email;
                 if (!email) continue;
 
+                const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+
                 await resend.emails.send({
-                  from: 'onboarding@resend.dev',
+                  from: fromEmail,
                   to: email,
                   subject: `New Assignment: ${input.title}`,
                   react: React.createElement(NewAssignmentEmail, {

@@ -25,10 +25,11 @@ if (!targetEmail) {
 
 async function sendTestEmails() {
   console.log(`📨 Sending test emails to ${targetEmail}...`);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
   try {
     const newAssignmentResp = await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: fromEmail,
       to: targetEmail,
       subject: '[Test] You have a new assignment!',
       react: React.createElement(NewAssignmentEmail, {
@@ -42,7 +43,7 @@ async function sendTestEmails() {
     console.log('✅ New Assignment Email Response:', newAssignmentResp);
 
     const gradedResp = await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: fromEmail,
       to: targetEmail,
       subject: '[Test] Assignment Graded!',
       react: React.createElement(AssignmentGradedEmail, {
