@@ -173,15 +173,14 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
                 </div>
 
                 <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-deadline" className="flex flex-col space-y-1 items-start text-left">
+                  <Label htmlFor="notify-deadline" className="flex flex-col space-y-1 items-start text-left text-muted-foreground">
                     <span>Deadline Reminders</span>
-                    <span className="font-normal text-xs text-muted-foreground">Before an assignment is due.</span>
+                    <span className="font-normal text-xs text-muted-foreground">Coming soon.</span>
                   </Label>
                   <Switch
                     id="notify-deadline"
-                    checked={optimisticSettings.notify_deadline_reminder}
-                    onCheckedChange={(checked) => handleToggle('notify_deadline_reminder', checked)}
-                    disabled={isPending}
+                    checked={false}
+                    disabled={true}
                   />
                 </div>
               </div>

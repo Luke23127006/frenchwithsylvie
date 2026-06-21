@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createSafeAction } from "../safe-action";
 import { z } from "zod";
+import { Resend } from "resend";
+import React from "react";
+import AssignmentGradedEmail from "@/emails/AssignmentGradedEmail";
 
 export const submitSolution = createSafeAction(
   z.object({
@@ -79,15 +82,77 @@ export const gradeSubmission = createSafeAction(
     feedback: z.string().nullable()
   }),
   ["teacher"],
-  async ({ input, supabase }) => {
+  async ({ input, user, supabase }) => {
     const { data, error } = await supabase
       .from("submissions")
       .update({ grade: input.grade, feedback: input.feedback })
       .eq("id", input.submissionId)
-      .select()
+      .select(`
+        *,
+        assignments (
+          title
+        )
+      `)
       .single();
 
     if (error) throw new Error(error.message);
+
+    // Asynchronously send email to student if opted in
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (resendApiKey && data.student_id) {
+      Promise.resolve().then(async () => {
+        try {
+          const resend = new Resend(resendApiKey);
+          const { createClient } = await import('@supabase/supabase-js');
+          const adminSupabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+          
+          const { data: studentData } = await adminSupabase
+            .from("users")
+            .select(`
+              id,
+              full_name,
+              user_notification_settings!inner(email, notify_assignment_graded)
+            `)
+            .eq("id", data.student_id)
+            .eq("user_notification_settings.notify_assignment_graded", true)
+            .not("user_notification_settings.email", "is", null)
+            .maybeSingle();
+
+          if (studentData) {
+            const settings = Array.isArray(studentData.user_notification_settings) 
+              ? studentData.user_notification_settings[0] 
+              : studentData.user_notification_settings;
+            
+            const email = settings?.email;
+            if (email) {
+              const teacherName = user.full_name || 'Your Teacher';
+              const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+              const assignmentLink = `${baseUrl}/assignment/${data.assignment_id}`;
+              const assignmentTitle = Array.isArray(data.assignments) ? data.assignments[0]?.title : data.assignments?.title;
+
+              await resend.emails.send({
+                from: 'onboarding@resend.dev',
+                to: email,
+                subject: `Assignment Graded: ${assignmentTitle || 'Your Assignment'}`,
+                react: React.createElement(AssignmentGradedEmail, {
+                  studentName: studentData.full_name,
+                  assignmentTitle: assignmentTitle || 'Assignment',
+                  teacherName: teacherName,
+                  assignmentLink: assignmentLink,
+                  grade: input.grade,
+                  feedback: input.feedback
+                }),
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Failed to send grading notification:", error);
+        }
+      });
+    }
 
     revalidatePath(`/dashboard/assignment/${data.assignment_id}`);
     return data;
