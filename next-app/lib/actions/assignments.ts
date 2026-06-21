@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createSafeAction } from "../safe-action";
 import { z } from "zod";
+import { Resend } from "resend";
+import { NewAssignmentEmail } from "@/emails/NewAssignmentEmail";
+import * as React from "react";
 
 export const createAssignment = createSafeAction(
   z.object({
@@ -39,6 +42,61 @@ export const createAssignment = createSafeAction(
         .insert(assigneesToInsert);
         
       if (assigneesError) throw new Error(assigneesError.message);
+
+      // Asynchronously send emails to students who opted in
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (resendApiKey) {
+        Promise.resolve().then(async () => {
+          try {
+            const resend = new Resend(resendApiKey);
+            const { createClient } = await import('@supabase/supabase-js');
+            const adminSupabase = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL!,
+              process.env.SUPABASE_SERVICE_ROLE_KEY!
+            );
+            
+            const { data: studentsData } = await adminSupabase
+              .from("users")
+              .select(`
+                id,
+                full_name,
+                user_notification_settings!inner(email, notify_new_assignment)
+              `)
+              .in("id", input.assigneeIds)
+              .eq("user_notification_settings.notify_new_assignment", true)
+              .not("user_notification_settings.email", "is", null);
+
+            if (studentsData && studentsData.length > 0) {
+              const teacherName = user.full_name || 'Your Teacher';
+              const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+              const assignmentLink = `${baseUrl}/assignment/${assignmentId}`;
+
+              for (const student of studentsData) {
+                const settings = Array.isArray(student.user_notification_settings) 
+                  ? student.user_notification_settings[0] 
+                  : student.user_notification_settings;
+                
+                const email = settings?.email;
+                if (!email) continue;
+
+                await resend.emails.send({
+                  from: 'onboarding@resend.dev',
+                  to: email,
+                  subject: `New Assignment: ${input.title}`,
+                  react: React.createElement(NewAssignmentEmail, {
+                    studentName: student.full_name,
+                    assignmentTitle: input.title,
+                    teacherName: teacherName,
+                    assignmentLink: assignmentLink,
+                  }),
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Failed to send assignment notifications:", error);
+          }
+        });
+      }
     }
 
     revalidatePath("/dashboard");

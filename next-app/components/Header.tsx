@@ -6,6 +6,8 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import Image from "next/image";
 import Link from "next/link";
 import { User } from "lucide-react";
+import NotificationSettings from "./NotificationSettings";
+import { getNotificationSettings } from "@/lib/actions/notifications";
 
 export default async function Header() {
   const cookieStore = await cookies();
@@ -15,6 +17,8 @@ export default async function Header() {
 
   const payload = await verifyToken(token);
   if (!payload) return null;
+
+  const settings = await getNotificationSettings();
 
   return (
     <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
@@ -34,6 +38,7 @@ export default async function Header() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationSettings initialSettings={settings} />
             <ChangePasswordModal />
             <form action={logout}>
               <Button variant="outline" size="sm" type="submit">
