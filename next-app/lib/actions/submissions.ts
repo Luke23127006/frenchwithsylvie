@@ -6,6 +6,8 @@ import { z } from "zod";
 import { Resend } from "resend";
 import React from "react";
 import AssignmentGradedEmail from "@/emails/AssignmentGradedEmail";
+import SubmissionReceivedEmail from "@/emails/SubmissionReceivedEmail";
+import { createClient } from "@supabase/supabase-js";
 
 export const submitSolution = createSafeAction(
   z.object({
@@ -54,6 +56,81 @@ export const submitSolution = createSafeAction(
     }
 
     if (error) throw new Error(error.message);
+
+    // Asynchronously send email to teacher if opted in
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (resendApiKey) {
+      Promise.resolve().then(async () => {
+        try {
+          const resend = new Resend(resendApiKey);
+          const { createClient } = await import('@supabase/supabase-js');
+          const adminSupabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+
+          const { data: assignmentData, error: fetchError } = await adminSupabase
+            .from("assignments")
+            .select(`
+              title,
+              created_by,
+              users!assignments_created_by_fkey ( full_name )
+            `)
+            .eq("id", input.assignmentId)
+            .single();
+
+          if (fetchError) {
+            console.error("Failed to fetch assignment for notification:", fetchError.message);
+            return;
+          }
+
+          if (!assignmentData || !assignmentData.created_by) {
+            console.log("No assignmentData or created_by:", assignmentData);
+            return;
+          }
+
+          console.log("Fetching settings for user:", assignmentData.created_by);
+          const { data: settings, error: settingsError } = await adminSupabase
+            .from("user_notification_settings")
+            .select("email, notify_submission_received")
+            .eq("user_id", assignmentData.created_by)
+            .single();
+
+          if (settingsError) {
+            console.error("Settings error:", settingsError);
+          }
+
+          console.log("Teacher settings:", settings);
+
+          if (settings?.email && settings.notify_submission_received) {
+            console.log("Preparing to send email to:", settings.email);
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+            const submissionLink = `${baseUrl}/dashboard/assignment/${input.assignmentId}`;
+            const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+            const usersData = assignmentData.users as any;
+            const teacherName = Array.isArray(usersData) ? usersData[0]?.full_name : usersData?.full_name || 'Teacher';
+
+            const resp = await resend.emails.send({
+              from: fromEmail,
+              to: settings.email,
+              subject: `New Submission: ${assignmentData.title}`,
+              react: React.createElement(SubmissionReceivedEmail, {
+                teacherName: teacherName as string,
+                studentName: user.full_name as string,
+                assignmentTitle: assignmentData.title,
+                submissionLink: submissionLink
+              }),
+            });
+            console.log("Resend email response:", resp);
+          } else {
+            console.log("Email not sent. settings.email:", settings?.email, "notify:", settings?.notify_submission_received);
+          }
+        } catch (err) {
+          console.error("Failed to send submission email (catch block):", err);
+          console.error("Failed to send submission email:", err);
+        }
+      });
+    }
 
     revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
     return data;

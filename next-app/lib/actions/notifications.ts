@@ -23,6 +23,7 @@ const updatePreferencesSchema = z.object({
   notify_new_assignment: z.boolean().optional(),
   notify_assignment_graded: z.boolean().optional(),
   notify_deadline_reminder: z.boolean().optional(),
+  notify_submission_received: z.boolean().optional(),
 });
 
 export async function getNotificationSettings() {

@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import React from 'react';
 import { NewAssignmentEmail } from '../emails/NewAssignmentEmail';
 import { AssignmentGradedEmail } from '../emails/AssignmentGradedEmail';
+import { SubmissionReceivedEmail } from '../emails/SubmissionReceivedEmail';
 
 // Load environment variables from .env.local
 config({ path: '.env.local' });
@@ -57,6 +58,20 @@ async function sendTestEmails() {
     });
 
     console.log('✅ Graded Email Response:', gradedResp);
+
+    const submissionResp = await resend.emails.send({
+      from: fromEmail,
+      to: targetEmail,
+      subject: '[Test] New Submission Received!',
+      react: React.createElement(SubmissionReceivedEmail, {
+        teacherName: 'Sylvie',
+        studentName: 'Test Student',
+        assignmentTitle: 'Les Verbes Réguliers (Test)',
+        submissionLink: 'http://localhost:3000/dashboard/assignment/123',
+      }),
+    });
+
+    console.log('✅ Submission Email Response:', submissionResp);
 
     console.log('🎉 Test emails sent successfully!');
   } catch (error) {
