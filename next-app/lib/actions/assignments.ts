@@ -16,7 +16,7 @@ export const createAssignment = createSafeAction(
     assigneeIds: z.array(z.string()),
   }),
   ["teacher"],
-  async ({ input, supabase }) => {
+  async ({ input, supabase, user }) => {
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
       .insert([{ 

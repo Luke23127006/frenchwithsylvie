@@ -96,3 +96,36 @@ export async function updateNotificationPreferences(
   revalidatePath('/student');
   return { success: true };
 }
+
+export async function unlinkEmail() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+
+  if (!token) {
+    return { error: 'Unauthorized' };
+  }
+
+  const payload = (await verifyToken(token)) as TokenPayload | null;
+  if (!payload || !payload.id) {
+    return { error: 'Unauthorized' };
+  }
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { error } = await supabase
+    .from('user_notification_settings')
+    .delete()
+    .eq('user_id', payload.id);
+
+  if (error) {
+    console.error('Failed to unlink email:', error);
+    return { error: 'Failed to unlink email' };
+  }
+
+  revalidatePath('/dashboard');
+  revalidatePath('/student');
+  return { success: true };
+}

@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { updateNotificationPreferences } from '@/lib/actions/notifications';
+import { updateNotificationPreferences, unlinkEmail } from '@/lib/actions/notifications';
 import toast from 'react-hot-toast';
 
 export type NotificationSettingsData = {
@@ -61,14 +61,32 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
   };
 
   const handleToggle = (key: keyof NotificationSettingsData, checked: boolean) => {
-    // Optimistically update the UI
-    setOptimisticSettings({ [key]: checked });
-
-    // Run the server action in a transition
     startTransition(async () => {
+      // Optimistically update the UI inside the transition
+      setOptimisticSettings({ [key]: checked });
+
+      // Run the server action
       const result = await updateNotificationPreferences({ [key]: checked });
       if (result.error) {
         toast.error(result.error);
+      }
+    });
+  };
+
+  const handleUnlink = () => {
+    if (!window.confirm("Are you sure you want to unlink your email? You will no longer receive any notifications.")) {
+      return;
+    }
+
+    startTransition(async () => {
+      // Optimistically unlink
+      setOptimisticSettings({ email: null });
+
+      const result = await unlinkEmail();
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Email unlinked successfully");
       }
     });
   };
@@ -111,14 +129,25 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
                 <span className="text-sm font-medium text-slate-700 truncate mr-2" title={optimisticSettings.email!}>
                   {optimisticSettings.email}
                 </span>
-                <span className="text-xs font-semibold uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-                  Linked
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                    Linked
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleUnlink}
+                    disabled={isPending}
+                    className="h-6 text-xs px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                  >
+                    Unlink
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-new" className="flex flex-col space-y-1">
+                  <Label htmlFor="notify-new" className="flex flex-col space-y-1 items-start text-left">
                     <span>New Assignments</span>
                     <span className="font-normal text-xs text-muted-foreground">When you receive new homework.</span>
                   </Label>
@@ -131,7 +160,7 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
                 </div>
                 
                 <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-graded" className="flex flex-col space-y-1">
+                  <Label htmlFor="notify-graded" className="flex flex-col space-y-1 items-start text-left">
                     <span>Grades & Feedback</span>
                     <span className="font-normal text-xs text-muted-foreground">When your teacher grades your work.</span>
                   </Label>
@@ -144,7 +173,7 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
                 </div>
 
                 <div className="flex items-center justify-between space-x-2">
-                  <Label htmlFor="notify-deadline" className="flex flex-col space-y-1">
+                  <Label htmlFor="notify-deadline" className="flex flex-col space-y-1 items-start text-left">
                     <span>Deadline Reminders</span>
                     <span className="font-normal text-xs text-muted-foreground">Before an assignment is due.</span>
                   </Label>
