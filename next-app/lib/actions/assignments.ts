@@ -55,7 +55,7 @@ export const createAssignment = createSafeAction(
               process.env.SUPABASE_SERVICE_ROLE_KEY!
             );
             
-            const { data: studentsData } = await adminSupabase
+            const { data: studentsData, error: queryError } = await adminSupabase
               .from("users")
               .select(`
                 id,
