@@ -12,17 +12,31 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Get the current user session from custom JWT
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth_token')?.value;
+    const stateToken = searchParams.get('state');
+    let userId: string | null = null;
 
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
+    if (stateToken) {
+      // 1. Verify the state token to get the user ID robustly
+      const payload = (await verifyToken(stateToken)) as TokenPayload | null;
+      if (payload && payload.id) {
+        userId = payload.id;
+      }
     }
 
-    const payload = (await verifyToken(token)) as TokenPayload | null;
-    if (!payload || !payload.id) {
-      return NextResponse.redirect(new URL('/login', request.url));
+    // Fallback to cookie if state token is missing or invalid
+    if (!userId) {
+      const cookieStore = await cookies();
+      const token = cookieStore.get('auth_token')?.value;
+
+      if (!token) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+
+      const payload = (await verifyToken(token)) as TokenPayload | null;
+      if (!payload || !payload.id) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+      userId = payload.id;
     }
 
     // 2. Exchange Google OAuth code for access token
@@ -76,7 +90,7 @@ export async function GET(request: NextRequest) {
       .from('user_notification_settings')
       .upsert(
         {
-          user_id: payload.id,
+          user_id: userId,
           email: email,
           // We don't overwrite existing preferences if they just relink, 
           // but if it's new, the database defaults will apply.

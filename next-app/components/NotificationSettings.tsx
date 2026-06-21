@@ -43,10 +43,21 @@ export default function NotificationSettings({ initialSettings }: NotificationSe
       return;
     }
 
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email profile`;
-    
-    // Redirect
-    window.location.href = authUrl;
+    // Run transition to get a secure state token
+    startTransition(async () => {
+      const { generateOAuthState } = await import('@/lib/actions/notifications');
+      const stateToken = await generateOAuthState();
+      
+      if (!stateToken) {
+        toast.error('Failed to generate secure OAuth state.');
+        return;
+      }
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email profile&state=${encodeURIComponent(stateToken)}`;
+      
+      // Redirect
+      window.location.href = authUrl;
+    });
   };
 
   const handleToggle = (key: keyof NotificationSettingsData, checked: boolean) => {

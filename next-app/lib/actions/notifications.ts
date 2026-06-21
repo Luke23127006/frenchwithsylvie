@@ -1,10 +1,23 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { verifyToken, TokenPayload } from '@/lib/auth';
+import { verifyToken, signToken, TokenPayload } from '@/lib/auth';
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+
+export async function generateOAuthState() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
+
+  if (!token) return null;
+
+  const payload = (await verifyToken(token)) as TokenPayload | null;
+  if (!payload || !payload.id) return null;
+
+  // Create a short-lived token just for the OAuth state
+  return await signToken({ id: payload.id, role: payload.role, state: payload.state });
+}
 
 const updatePreferencesSchema = z.object({
   notify_new_assignment: z.boolean().optional(),
