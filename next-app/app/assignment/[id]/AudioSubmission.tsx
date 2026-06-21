@@ -20,6 +20,7 @@ export default function AudioSubmission({ assignmentId, onSuccess }: AudioSubmis
   // Common states
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [activeMode, setActiveMode] = useState<"record" | "upload">("record");
 
   // Upload states
@@ -138,6 +139,7 @@ export default function AudioSubmission({ assignmentId, onSuccess }: AudioSubmis
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
 
     try {
       // 1. Get Signed URL
@@ -161,8 +163,16 @@ export default function AudioSubmission({ assignmentId, onSuccess }: AudioSubmis
         xhr.setRequestHeader("Authorization", `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`);
         xhr.setRequestHeader("Content-Type", fileToUpload.type || "audio/mpeg");
 
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentage = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(percentage);
+          }
+        };
+
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadProgress(100);
             resolve();
           } else {
             reject(new Error(`Failed to upload: ${xhr.statusText}`));
@@ -278,6 +288,28 @@ export default function AudioSubmission({ assignmentId, onSuccess }: AudioSubmis
             </form>
           </TabsContent>
         </Tabs>
+        
+        {isUploading && uploadProgress > 0 && (
+          <div className="space-y-3 mt-6 p-4 border rounded-md bg-secondary/20">
+            <p className="text-sm font-medium mb-1 flex items-center">
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Uploading Audio...
+            </p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span className="truncate max-w-[200px]">
+                  {activeMode === "upload" ? selectedFile?.name : "Recorded Audio"}
+                </span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-primary h-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

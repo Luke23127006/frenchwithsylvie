@@ -46,7 +46,7 @@ export const handleLogin = createPublicAction(
     cookieStore.set("auth_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24, // 1 day
     });
@@ -125,7 +125,7 @@ export const updateOnboardingState = createSafeAction(
     cookieStore.set("auth_token", newToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24, // 1 day
     });
