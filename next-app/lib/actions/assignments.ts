@@ -61,38 +61,63 @@ export const createAssignment = createSafeAction(
               .select(`
                 id,
                 full_name,
-                user_notification_settings!inner(email, notify_new_assignment)
+                user_notification_settings(email, notify_new_assignment)
               `)
-              .in("id", input.assigneeIds)
-              .eq("user_notification_settings.notify_new_assignment", true)
-              .not("user_notification_settings.email", "is", null);
+              .in("id", input.assigneeIds);
 
             if (studentsData && studentsData.length > 0) {
               const teacherName = user.full_name || 'Your Teacher';
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
+              const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
               const assignmentLink = `${baseUrl}/assignment/${assignmentId}`;
 
               for (const student of studentsData) {
+                // 1. Insert In-App Notification
+                const notificationPayload = {
+                  user_id: student.id,
+                  type: 'new_assignment',
+                  title: 'New Assignment',
+                  message: `You have a new assignment: ${input.title}`,
+                  action_url: `/assignment/${assignmentId}`
+                };
+
+                const { data: insertedNotification, error: insertError } = await adminSupabase
+                  .from('in_app_notifications')
+                  .insert(notificationPayload)
+                  .select()
+                  .single();
+
+                if (!insertError && insertedNotification) {
+                  // 2. Emit Broadcast Event
+                  await adminSupabase.channel(`user_notifications_${student.id}`).send({
+                    type: 'broadcast',
+                    event: 'new_notification',
+                    payload: insertedNotification
+                  });
+                } else {
+                  console.error("Failed to insert in-app notification:", insertError);
+                }
+
+                // 3. Send Email Notification (if opted in)
                 const settings = Array.isArray(student.user_notification_settings) 
                   ? student.user_notification_settings[0] 
                   : student.user_notification_settings;
                 
-                const email = settings?.email;
-                if (!email) continue;
+                if (settings?.email && settings?.notify_new_assignment) {
+                  const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
-                const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-
-                await resend.emails.send({
-                  from: fromEmail,
-                  to: email,
-                  subject: `New Assignment: ${input.title}`,
-                  react: React.createElement(NewAssignmentEmail, {
-                    studentName: student.full_name,
-                    assignmentTitle: input.title,
-                    teacherName: teacherName,
-                    assignmentLink: assignmentLink,
-                  }),
-                });
+                  await resend.emails.send({
+                    from: fromEmail,
+                    to: settings.email,
+                    subject: `New Assignment: ${input.title}`,
+                    react: React.createElement(NewAssignmentEmail, {
+                      studentName: student.full_name,
+                      assignmentTitle: input.title,
+                      teacherName: teacherName,
+                      assignmentLink: assignmentLink,
+                    }),
+                  });
+                }
               }
             }
           } catch (error) {

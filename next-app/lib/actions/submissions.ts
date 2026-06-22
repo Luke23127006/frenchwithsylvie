@@ -102,9 +102,36 @@ export const submitSolution = createSafeAction(
 
           console.log("Teacher settings:", settings);
 
+          // 1. Insert In-App Notification
+          const notificationPayload = {
+            user_id: assignmentData.created_by,
+            type: 'submission_received',
+            title: 'New Submission',
+            message: `${user.full_name} submitted: ${assignmentData.title}`,
+            action_url: `/dashboard/assignment/${input.assignmentId}`
+          };
+
+          const { data: insertedNotification, error: insertError } = await adminSupabase
+            .from('in_app_notifications')
+            .insert(notificationPayload)
+            .select()
+            .single();
+
+          if (!insertError && insertedNotification) {
+            // 2. Emit Broadcast Event
+            await adminSupabase.channel(`user_notifications_${assignmentData.created_by}`).send({
+              type: 'broadcast',
+              event: 'new_notification',
+              payload: insertedNotification
+            });
+          } else {
+            console.error("Failed to insert in-app notification:", insertError);
+          }
+
           if (settings?.email && settings.notify_submission_received) {
             console.log("Preparing to send email to:", settings.email);
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
+            const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
             const submissionLink = `${baseUrl}/dashboard/assignment/${input.assignmentId}`;
             const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
             const usersData = assignmentData.users as any;
@@ -191,24 +218,51 @@ export const gradeSubmission = createSafeAction(
             .select(`
               id,
               full_name,
-              user_notification_settings!inner(email, notify_assignment_graded)
+              user_notification_settings(email, notify_assignment_graded)
             `)
             .eq("id", data.student_id)
-            .eq("user_notification_settings.notify_assignment_graded", true)
-            .not("user_notification_settings.email", "is", null)
             .maybeSingle();
 
           if (studentData) {
+            const assignmentTitle = Array.isArray(data.assignments) ? data.assignments[0]?.title : data.assignments?.title;
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
+            const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
+            const assignmentLink = `${baseUrl}/assignment/${data.assignment_id}`;
+
+            // 1. Insert In-App Notification
+            const notificationPayload = {
+              user_id: data.student_id,
+              type: 'assignment_graded',
+              title: 'Assignment Graded',
+              message: `Your assignment "${assignmentTitle || 'Assignment'}" has been graded.`,
+              action_url: `/assignment/${data.assignment_id}`
+            };
+
+            const { data: insertedNotification, error: insertError } = await adminSupabase
+              .from('in_app_notifications')
+              .insert(notificationPayload)
+              .select()
+              .single();
+
+            if (!insertError && insertedNotification) {
+              // 2. Emit Broadcast Event
+              await adminSupabase.channel(`user_notifications_${data.student_id}`).send({
+                type: 'broadcast',
+                event: 'new_notification',
+                payload: insertedNotification
+              });
+            } else {
+              console.error("Failed to insert in-app notification:", insertError);
+            }
+
+            // 3. Send Email Notification (if opted in)
             const settings = Array.isArray(studentData.user_notification_settings) 
               ? studentData.user_notification_settings[0] 
               : studentData.user_notification_settings;
             
             const email = settings?.email;
-            if (email) {
+            if (email && settings?.notify_assignment_graded) {
               const teacherName = user.full_name || 'Your Teacher';
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
-              const assignmentLink = `${baseUrl}/assignment/${data.assignment_id}`;
-              const assignmentTitle = Array.isArray(data.assignments) ? data.assignments[0]?.title : data.assignments?.title;
               const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
               await resend.emails.send({

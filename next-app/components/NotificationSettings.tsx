@@ -2,7 +2,6 @@
 
 import { useTransition, useOptimistic } from 'react';
 import { Bell, Mail } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -97,18 +96,8 @@ export default function NotificationSettings({ initialSettings, isTeacher }: Not
   const hasEmailLinked = !!optimisticSettings.email;
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full border bg-slate-50 text-slate-600 hover:text-primary hover:bg-primary/10">
-          <Bell className="h-5 w-5" />
-          {/* Subtle indicator if not linked, so users know they can set it up */}
-          {!hasEmailLinked && (
-            <span className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-4" align="end" sideOffset={8}>
-        <div className="space-y-4">
+    <div className="w-full">
+      <div className="space-y-4">
           <div className="flex items-center gap-2 border-b pb-3">
             <Mail className="h-5 w-5 text-muted-foreground" />
             <div>
@@ -207,7 +196,6 @@ export default function NotificationSettings({ initialSettings, isTeacher }: Not
             </div>
           )}
         </div>
-      </PopoverContent>
-    </Popover>
+    </div>
   );
 }
