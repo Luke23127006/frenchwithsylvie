@@ -7,6 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { User } from "lucide-react";
 import NotificationFeed from "./NotificationFeed";
+import FeatureTourProvider from "./FeatureTourProvider";
 import { getNotificationSettings } from "@/lib/actions/notifications";
 
 export default async function Header() {
@@ -48,6 +49,7 @@ export default async function Header() {
           </div>
         </div>
       </div>
+      <FeatureTourProvider />
     </header>
   );
 }

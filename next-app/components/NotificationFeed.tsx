@@ -92,7 +92,7 @@ export default function NotificationFeed({ userId, isTeacher, initialSettings }:
   return (
     <Popover open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setShowSettings(false); }}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full border bg-slate-50 text-slate-600 hover:text-primary hover:bg-primary/10">
+        <Button variant="ghost" size="icon" className="joyride-notif-bell relative h-10 w-10 rounded-full border bg-slate-50 text-slate-600 hover:text-primary hover:bg-primary/10">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-white">
