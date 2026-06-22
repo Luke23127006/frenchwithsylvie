@@ -130,7 +130,8 @@ export const submitSolution = createSafeAction(
 
           if (settings?.email && settings.notify_submission_received) {
             console.log("Preparing to send email to:", settings.email);
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
+            const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
             const submissionLink = `${baseUrl}/dashboard/assignment/${input.assignmentId}`;
             const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
             const usersData = assignmentData.users as any;
@@ -224,7 +225,8 @@ export const gradeSubmission = createSafeAction(
 
           if (studentData) {
             const assignmentTitle = Array.isArray(data.assignments) ? data.assignments[0]?.title : data.assignments?.title;
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
+            const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
             const assignmentLink = `${baseUrl}/assignment/${data.assignment_id}`;
 
             // 1. Insert In-App Notification

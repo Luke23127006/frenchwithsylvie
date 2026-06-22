@@ -67,7 +67,8 @@ export const createAssignment = createSafeAction(
 
             if (studentsData && studentsData.length > 0) {
               const teacherName = user.full_name || 'Your Teacher';
-              const baseUrl = process.env.NEXT_PUBLIC_APP_URL ? `https://${process.env.NEXT_PUBLIC_APP_URL}` : 'http://localhost:3000';
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
+              const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
               const assignmentLink = `${baseUrl}/assignment/${assignmentId}`;
 
               for (const student of studentsData) {
