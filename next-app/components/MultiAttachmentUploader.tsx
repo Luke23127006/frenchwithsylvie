@@ -242,7 +242,7 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
   };
 
   const imageAttachments = attachments.filter(a => a.file && a.file.type.startsWith('image/'));
-  const canCombineToPdf = imageAttachments.length >= 2;
+  const canCombineToPdf = imageAttachments.length >= 1;
 
   const openCombineModal = () => {
     setModalImages([...imageAttachments]);
@@ -377,7 +377,7 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
             disabled={isUploading}
             className="w-full bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 shadow-sm"
           >
-            Combine {imageAttachments.length} Images to single PDF
+            {imageAttachments.length > 1 ? `Combine ${imageAttachments.length} Images to single PDF` : `Convert Image to PDF`}
           </Button>
         </div>
       )}

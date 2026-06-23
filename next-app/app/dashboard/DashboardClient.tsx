@@ -98,6 +98,12 @@ export default function DashboardClient({ assignments, students, trashedAssignme
       return;
     }
 
+    const hasImages = stagedAttachments.some(att => att.file?.type.startsWith('image/'));
+    if (hasImages) {
+      toast.error("Please convert your images to a PDF before creating the assignment.");
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress({});
 
