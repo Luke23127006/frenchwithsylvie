@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { v4 as uuidv4 } from "uuid";
 import toast from "react-hot-toast";
@@ -81,6 +88,30 @@ function SortableAttachmentItem({ item, onRemove, onRename, uploadProgress }: { 
   );
 }
 
+function SortableImageItem({ item }: { item: StagedAttachment }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  const style = { 
+    transform: CSS.Transform.toString(transform), 
+    transition, 
+    touchAction: 'none', 
+    zIndex: isDragging ? 50 : 1 
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      {...attributes} 
+      {...listeners}
+      className={`relative aspect-square border-2 rounded-xl bg-slate-100 shadow-sm transition-colors transition-shadow overflow-hidden cursor-grab ${
+        isDragging ? 'cursor-grabbing border-blue-500 shadow-2xl scale-105 rotate-2' : 'border-slate-200 hover:border-blue-400 hover:shadow-md'
+      }`}
+    >
+      <img src={item.url} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
+    </div>
+  );
+}
+
 interface MultiAttachmentUploaderProps {
   attachments: StagedAttachment[];
   setAttachments: React.Dispatch<React.SetStateAction<StagedAttachment[]>>;
@@ -98,6 +129,8 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [isCombining, setIsCombining] = useState(false);
+  const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
+  const [modalImages, setModalImages] = useState<StagedAttachment[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -211,14 +244,19 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
   const imageAttachments = attachments.filter(a => a.file && a.file.type.startsWith('image/'));
   const canCombineToPdf = imageAttachments.length >= 2;
 
-  const handleCombineImages = async () => {
+  const openCombineModal = () => {
+    setModalImages([...imageAttachments]);
+    setIsCombineModalOpen(true);
+  };
+
+  const confirmCombineImages = async () => {
     setIsCombining(true);
     try {
       const { convertImagesToPDF } = await import('@/lib/pdf');
-      const filesToCombine = imageAttachments.map(a => a.file!);
+      const filesToCombine = modalImages.map(a => a.file!);
       const pdfFile = await convertImagesToPDF(filesToCombine);
       
-      const imageIds = new Set(imageAttachments.map(a => a.id));
+      const imageIds = new Set(modalImages.map(a => a.id));
       
       const newAtt: StagedAttachment = {
         id: uuidv4(),
@@ -229,12 +267,24 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
       };
       
       setAttachments(prev => [...prev.filter(a => !imageIds.has(a.id)), newAtt]);
+      setIsCombineModalOpen(false);
       toast.success("Images combined successfully!");
     } catch (e) {
       console.error(e);
       toast.error("Failed to combine images");
     } finally {
       setIsCombining(false);
+    }
+  };
+
+  const handleModalDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      setModalImages((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over?.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
   };
 
@@ -323,11 +373,11 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
           <Button 
             type="button" 
             variant="secondary" 
-            onClick={handleCombineImages}
-            disabled={isUploading || isCombining}
+            onClick={openCombineModal}
+            disabled={isUploading}
             className="w-full bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 shadow-sm"
           >
-            {isCombining ? "Combining..." : `Combine ${imageAttachments.length} Images to single PDF`}
+            Combine {imageAttachments.length} Images to single PDF
           </Button>
         </div>
       )}
@@ -358,6 +408,39 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
           </DndContext>
         </div>
       )}
+
+      {/* Image Sorting Modal */}
+      <Dialog open={isCombineModalOpen} onOpenChange={setIsCombineModalOpen}>
+        <DialogContent className="sm:max-w-[800px] w-[95vw]">
+          <DialogHeader>
+            <DialogTitle>Arrange PDF Pages</DialogTitle>
+            <DialogDescription>
+              Drag and drop the images below to set the order of the pages in your new PDF document.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 max-h-[70vh] overflow-y-auto custom-scrollbar px-1">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModalDragEnd}>
+              <SortableContext items={modalImages.map(a => a.id)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-1">
+                  {modalImages.map((att) => (
+                    <SortableImageItem key={att.id} item={att} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+          
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsCombineModalOpen(false)} disabled={isCombining}>
+              Cancel
+            </Button>
+            <Button onClick={confirmCombineImages} disabled={isCombining}>
+              {isCombining ? "Converting..." : "Confirm & Convert to PDF"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
