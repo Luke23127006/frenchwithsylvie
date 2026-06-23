@@ -44,7 +44,6 @@ interface DashboardClientProps {
 export default function DashboardClient({ assignments, students, trashedAssignments = [] }: DashboardClientProps) {
   const [title, setTitle] = useState("");
   const [stagedAttachments, setStagedAttachments] = useState<StagedAttachment[]>([]);
-  const [submissionFormat, setSubmissionFormat] = useState<"DOCUMENT" | "AUDIO" | "BOTH">("DOCUMENT");
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
@@ -158,7 +157,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         const createResult = await createAssignment({ 
           title, 
           attachments: uploadedAttachments, 
-          submissionFormat, 
+          submissionFormat: "BOTH", 
           assigneeIds: selectedStudents 
         });
         if (createResult.error) {
@@ -170,7 +169,6 @@ export default function DashboardClient({ assignments, students, trashedAssignme
         toast.success("Assignment created successfully!");
         setTitle("");
         setStagedAttachments([]);
-        setSubmissionFormat("DOCUMENT");
         setSelectedStudents([]);
         
         setIsUploading(false);
@@ -253,55 +251,6 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   disabled={isPending}
                   required 
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label>Expected Student Submission</Label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div 
-                    onClick={() => setSubmissionFormat("DOCUMENT")}
-                    className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
-                      submissionFormat === "DOCUMENT" 
-                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <FileText className={`h-8 w-8 ${submissionFormat === "DOCUMENT" ? "text-blue-600" : "text-slate-400"}`} />
-                    <div>
-                      <div className="font-semibold text-slate-800">Document</div>
-                      <div className="text-xs text-slate-500">PDF or Images</div>
-                    </div>
-                  </div>
-                  
-                  <div 
-                    onClick={() => setSubmissionFormat("AUDIO")}
-                    className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
-                      submissionFormat === "AUDIO" 
-                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <Mic className={`h-8 w-8 ${submissionFormat === "AUDIO" ? "text-blue-600" : "text-slate-400"}`} />
-                    <div>
-                      <div className="font-semibold text-slate-800">Audio</div>
-                      <div className="text-xs text-slate-500">Voice recording</div>
-                    </div>
-                  </div>
-
-                  <div 
-                    onClick={() => setSubmissionFormat("BOTH")}
-                    className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center space-y-2 transition-all ${
-                      submissionFormat === "BOTH" 
-                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500/20" 
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <FileAudio className={`h-8 w-8 ${submissionFormat === "BOTH" ? "text-blue-600" : "text-slate-400"}`} />
-                    <div>
-                      <div className="font-semibold text-slate-800">Both</div>
-                      <div className="text-xs text-slate-500">Document + Audio</div>
-                    </div>
-                  </div>
-                </div>
               </div>
               <MultiAttachmentUploader
                 attachments={stagedAttachments}
