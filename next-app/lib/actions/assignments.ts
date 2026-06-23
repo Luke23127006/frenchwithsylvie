@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Resend } from "resend";
 import { NewAssignmentEmail } from "@/emails/NewAssignmentEmail";
 import * as React from "react";
+import { createClient } from "@supabase/supabase-js";
 
 export const createAssignment = createSafeAction(
   z.object({
@@ -213,6 +214,11 @@ export const getAssignmentDetailsForTeacher = createSafeAction(
   z.object({ assignmentId: z.string() }),
   ["teacher"],
   async ({ input, supabase }) => {
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const { data: assignment, error: assignmentError } = await supabase
       .from("assignments")
       .select("*")
@@ -231,15 +237,24 @@ export const getAssignmentDetailsForTeacher = createSafeAction(
 
     if (assigneesError) throw new Error(assigneesError.message);
 
-    const { data: submissionsData, error: submissionsError } = await supabase
+    const { data: submissionsData, error: submissionsError } = await adminSupabase
       .from("submissions")
-      .select("*")
+      .select(`
+        *,
+        submission_attachments (*)
+      `)
       .eq("assignment_id", input.assignmentId);
 
     if (submissionsError) throw new Error(submissionsError.message);
 
     const assignees = assigneesData.map((a: any) => {
       const submission = submissionsData.find((s: any) => s.student_id === a.student_id);
+      
+      // Sort attachments by order_index if they exist
+      if (submission && submission.submission_attachments) {
+        submission.submission_attachments.sort((attA: any, attB: any) => attA.order_index - attB.order_index);
+      }
+
       return {
         id: a.student_id,
         full_name: a.users.full_name,

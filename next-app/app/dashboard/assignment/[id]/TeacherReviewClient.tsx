@@ -37,9 +37,29 @@ interface Student {
   username: string;
 }
 
+interface SubmissionAttachment {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: 'document' | 'audio';
+  order_index: number;
+}
+
+interface Submission {
+  id: string;
+  student_id: string;
+  assignment_id: string;
+  grade: string | null;
+  feedback: string | null;
+  submitted_at: string;
+  file_url?: string | null; // legacy
+  audio_url?: string | null; // legacy
+  submission_attachments?: SubmissionAttachment[];
+}
+
 interface Assignee extends Student {
   has_submitted: boolean;
-  submission: any | null;
+  submission: Submission | null;
 }
 
 interface TeacherReviewClientProps {
@@ -116,7 +136,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
     startTransition(async () => {
       try {
-        const result = await gradeSubmission({ submissionId: selectedAssignee.submission.id, grade: gradeNum.toString(), feedback: feedback });
+        const result = await gradeSubmission({ submissionId: selectedAssignee.submission!.id, grade: gradeNum.toString(), feedback: feedback });
         if (result.error) {
           toast.error("Failed to save grade: " + result.error);
         } else {
@@ -125,10 +145,10 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
           setSelectedAssignee({
             ...selectedAssignee,
             submission: {
-              ...selectedAssignee.submission,
+              ...selectedAssignee.submission!,
               grade,
               feedback
-            }
+            } as Submission
           });
         }
       } catch (e: any) {
@@ -145,7 +165,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
     startTransition(async () => {
       try {
-        const result = await gradeSubmission({ submissionId: selectedAssignee.submission.id, grade: null, feedback: null });
+        const result = await gradeSubmission({ submissionId: selectedAssignee.submission!.id, grade: null, feedback: null });
         if (result.error) {
           toast.error("Failed to remove grade: " + result.error);
         } else {
@@ -155,10 +175,10 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
           setSelectedAssignee({
             ...selectedAssignee,
             submission: {
-              ...selectedAssignee.submission,
+              ...selectedAssignee.submission!,
               grade: null,
               feedback: null
-            }
+            } as Submission
           });
         }
       } catch (e: any) {
@@ -382,9 +402,9 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
         {/* Right Panel: Submission Viewer & Grading */}
         <div className="md:col-span-9 flex flex-col gap-6">
-          <Card className="flex flex-col overflow-hidden bg-slate-50/50 h-[800px]">
+          <Card className="flex flex-col overflow-hidden bg-slate-50/50 min-h-[500px]">
             {selectedAssignee ? (
-              selectedAssignee.has_submitted ? (
+              selectedAssignee.has_submitted && selectedAssignee.submission ? (
                 <>
                   <CardHeader className="pb-3 border-b bg-white">
                     <div className="flex items-center justify-between">
@@ -394,80 +414,100 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                           Submitted on {new Date(selectedAssignee.submission.submitted_at).toLocaleString()}
                         </CardDescription>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={selectedAssignee.submission.file_url || selectedAssignee.submission.audio_url} target="_blank" rel="noopener noreferrer">
-                          Open Original
-                        </a>
-                      </Button>
                     </div>
                   </CardHeader>
-                  <div className="flex-1 bg-slate-100/50 p-4 flex flex-col gap-4 overflow-y-auto">
-                      {selectedAssignee.submission.submission_attachments && selectedAssignee.submission.submission_attachments.length > 0 ? (
-                        <div className="flex flex-col gap-6">
-                          {selectedAssignee.submission.submission_attachments.map((att: any, index: number) => (
-                            <div key={att.id || index} className="flex flex-col gap-2">
-                              <div className="flex items-center justify-between bg-white p-3 rounded-lg border shadow-sm">
-                                <div className="flex items-center gap-3">
-                                  {att.file_type === 'document' ? <FileText className="h-5 w-5 text-blue-500" /> : <Mic className="h-5 w-5 text-indigo-500" />}
-                                  <span className="font-medium text-sm text-slate-700">{att.file_name}</span>
+                  <div className="flex-1 bg-slate-50/50 p-6 flex flex-col gap-6">
+                    {(() => {
+                      const attachments = selectedAssignee.submission.submission_attachments || [];
+                      const documents = attachments.filter(a => a.file_type === 'document');
+                      const audios = attachments.filter(a => a.file_type === 'audio');
+                      
+                      const hasLegacyFile = !attachments.length && selectedAssignee.submission.file_url;
+                      const hasLegacyAudio = !attachments.length && selectedAssignee.submission.audio_url;
+
+                      if (!attachments.length && !hasLegacyFile && !hasLegacyAudio) {
+                        return <p className="text-muted-foreground text-center mt-10">No attachments found.</p>;
+                      }
+
+                      return (
+                        <Card className="shadow-sm border border-slate-200 bg-white">
+                          <CardHeader className="bg-slate-50/80 border-b pb-4 pt-5 px-6">
+                            <CardTitle className="text-lg font-semibold text-slate-800">Student Attachments</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-0 flex flex-col divide-y divide-slate-100">
+                            
+                            {/* Documents Section */}
+                            {(documents.length > 0 || hasLegacyFile) && (
+                              <div className="p-6">
+                                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Documents</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {documents.map((doc, i) => (
+                                    <div key={doc.id || i} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors group">
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="bg-blue-100 p-2 rounded-md shrink-0">
+                                          <FileText className="h-5 w-5 text-blue-600" />
+                                        </div>
+                                        <span className="font-medium text-sm text-slate-700 truncate">{doc.file_name}</span>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 sm:opacity-0 group-hover:opacity-100 transition-opacity" asChild>
+                                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer">View</a>
+                                      </Button>
+                                    </div>
+                                  ))}
+                                  {hasLegacyFile && (
+                                    <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors group">
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="bg-blue-100 p-2 rounded-md shrink-0">
+                                          <FileText className="h-5 w-5 text-blue-600" />
+                                        </div>
+                                        <span className="font-medium text-sm text-slate-700 truncate">Uploaded Document</span>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 sm:opacity-0 group-hover:opacity-100 transition-opacity" asChild>
+                                        <a href={selectedAssignee.submission.file_url!} target="_blank" rel="noopener noreferrer">View</a>
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
-                                <Button variant="ghost" size="sm" asChild>
-                                  <a href={att.file_url} target="_blank" rel="noopener noreferrer">
-                                    Open
-                                  </a>
-                                </Button>
                               </div>
-                              {att.file_type === 'document' && (
-                                <div className="w-full h-[600px] bg-white rounded-lg border shadow-sm overflow-hidden relative">
-                                  <iframe 
-                                    src={att.file_url} 
-                                    className="absolute inset-0 w-full h-full"
-                                    title={`${selectedAssignee.full_name} document attachment ${index + 1}`}
-                                  />
+                            )}
+
+                            {/* Audio Playlist Section */}
+                            {(audios.length > 0 || hasLegacyAudio) && (
+                              <div className="p-6">
+                                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Audio Playlist</h4>
+                                <div className="flex flex-col gap-4">
+                                  {audios.map((audio, i) => (
+                                    <div key={audio.id || i} className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+                                      <div className="flex items-center gap-3">
+                                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-bold px-2.5">#{i + 1}</Badge>
+                                        <Mic className="h-5 w-5 text-indigo-500" />
+                                        <span className="font-semibold text-slate-700">{audio.file_name}</span>
+                                      </div>
+                                      <audio controls className="w-full max-w-2xl h-12" src={audio.file_url}>
+                                        Your browser does not support the audio element.
+                                      </audio>
+                                    </div>
+                                  ))}
+                                  {hasLegacyAudio && (
+                                    <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+                                      <div className="flex items-center gap-3">
+                                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-bold px-2.5">#1</Badge>
+                                        <Mic className="h-5 w-5 text-indigo-500" />
+                                        <span className="font-semibold text-slate-700">Recorded Audio</span>
+                                      </div>
+                                      <audio controls className="w-full max-w-2xl h-12" src={selectedAssignee.submission.audio_url!}>
+                                        Your browser does not support the audio element.
+                                      </audio>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {att.file_type === 'audio' && (
-                                <Card className="flex-shrink-0">
-                                  <CardContent className="pt-6">
-                                    <audio controls className="w-full h-12" src={att.file_url}>
-                                      Your browser does not support the audio element.
-                                    </audio>
-                                  </CardContent>
-                                </Card>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        // Fallback for legacy submissions without attachments in the join table
-                        <div className="flex flex-col gap-4">
-                          {selectedAssignee.submission.file_url && (
-                            <div className="w-full h-full min-h-[500px] bg-white rounded-lg border shadow-sm overflow-hidden relative">
-                              <iframe 
-                                src={selectedAssignee.submission.file_url} 
-                                className="absolute inset-0 w-full h-full"
-                                title={`${selectedAssignee.full_name} document submission`}
-                              />
-                            </div>
-                          )}
-                          {selectedAssignee.submission.audio_url && (
-                            <Card className="flex-shrink-0">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                  <Mic className="h-5 w-5 text-indigo-600" />
-                                  Audio Submission
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <audio controls className="w-full h-12" src={selectedAssignee.submission.audio_url}>
-                                  Your browser does not support the audio element.
-                                </audio>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
+                  </div>
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
@@ -490,7 +530,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
           </Card>
 
           {/* Grading Panel (Only shown if a submitted assignee is selected) */}
-          {selectedAssignee && selectedAssignee.has_submitted && (
+          {selectedAssignee && selectedAssignee.has_submitted && selectedAssignee.submission && (
             <Card className="flex-shrink-0">
               <CardHeader className="py-4">
                 <CardTitle className="text-lg">Grading & Feedback</CardTitle>
