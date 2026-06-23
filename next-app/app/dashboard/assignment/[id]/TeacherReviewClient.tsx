@@ -402,31 +402,72 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                     </div>
                   </CardHeader>
                   <div className="flex-1 bg-slate-100/50 p-4 flex flex-col gap-4 overflow-y-auto">
-                    {selectedAssignee.submission.file_url && (
-                      <div className="w-full h-full min-h-[500px] bg-white rounded-lg border shadow-sm overflow-hidden relative">
-                        <iframe 
-                          src={selectedAssignee.submission.file_url} 
-                          className="absolute inset-0 w-full h-full"
-                          title={`${selectedAssignee.full_name} document submission`}
-                        />
-                      </div>
-                    )}
-                    {selectedAssignee.submission.audio_url && (
-                      <Card className="flex-shrink-0">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <Mic className="h-5 w-5 text-indigo-600" />
-                            Audio Submission
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <audio controls className="w-full h-12" src={selectedAssignee.submission.audio_url}>
-                            Your browser does not support the audio element.
-                          </audio>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
+                      {selectedAssignee.submission.submission_attachments && selectedAssignee.submission.submission_attachments.length > 0 ? (
+                        <div className="flex flex-col gap-6">
+                          {selectedAssignee.submission.submission_attachments.map((att: any, index: number) => (
+                            <div key={att.id || index} className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between bg-white p-3 rounded-lg border shadow-sm">
+                                <div className="flex items-center gap-3">
+                                  {att.file_type === 'document' ? <FileText className="h-5 w-5 text-blue-500" /> : <Mic className="h-5 w-5 text-indigo-500" />}
+                                  <span className="font-medium text-sm text-slate-700">{att.file_name}</span>
+                                </div>
+                                <Button variant="ghost" size="sm" asChild>
+                                  <a href={att.file_url} target="_blank" rel="noopener noreferrer">
+                                    Open
+                                  </a>
+                                </Button>
+                              </div>
+                              {att.file_type === 'document' && (
+                                <div className="w-full h-[600px] bg-white rounded-lg border shadow-sm overflow-hidden relative">
+                                  <iframe 
+                                    src={att.file_url} 
+                                    className="absolute inset-0 w-full h-full"
+                                    title={`${selectedAssignee.full_name} document attachment ${index + 1}`}
+                                  />
+                                </div>
+                              )}
+                              {att.file_type === 'audio' && (
+                                <Card className="flex-shrink-0">
+                                  <CardContent className="pt-6">
+                                    <audio controls className="w-full h-12" src={att.file_url}>
+                                      Your browser does not support the audio element.
+                                    </audio>
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        // Fallback for legacy submissions without attachments in the join table
+                        <div className="flex flex-col gap-4">
+                          {selectedAssignee.submission.file_url && (
+                            <div className="w-full h-full min-h-[500px] bg-white rounded-lg border shadow-sm overflow-hidden relative">
+                              <iframe 
+                                src={selectedAssignee.submission.file_url} 
+                                className="absolute inset-0 w-full h-full"
+                                title={`${selectedAssignee.full_name} document submission`}
+                              />
+                            </div>
+                          )}
+                          {selectedAssignee.submission.audio_url && (
+                            <Card className="flex-shrink-0">
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                  <Mic className="h-5 w-5 text-indigo-600" />
+                                  Audio Submission
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <audio controls className="w-full h-12" src={selectedAssignee.submission.audio_url}>
+                                  Your browser does not support the audio element.
+                                </audio>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      )}
+                    </div>
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
