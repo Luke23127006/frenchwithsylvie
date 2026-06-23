@@ -166,7 +166,7 @@ export const getAssignments = createSafeAction(
         .select(`
           *,
           assignment_assignees!inner(student_id),
-          submissions (id, student_id)
+          submissions (id, student_id, grade)
         `)
         .eq('assignment_assignees.student_id', user.id)
         .is('deleted_at', null)
@@ -174,11 +174,15 @@ export const getAssignments = createSafeAction(
         .order('created_at', { ascending: false });
         
       if (error) throw new Error(error.message);
-      const formattedData = data.map((assignment: any) => ({
-        ...assignment,
-        submissions_count: assignment.submissions?.length || 0,
-        has_submitted: assignment.submissions?.some((sub: any) => sub.student_id === user.id) || false
-      }));
+      const formattedData = data.map((assignment: any) => {
+        const userSubmission = assignment.submissions?.find((sub: any) => sub.student_id === user.id);
+        return {
+          ...assignment,
+          submissions_count: assignment.submissions?.length || 0,
+          has_submitted: !!userSubmission,
+          grade: userSubmission?.grade || null
+        };
+      });
       return formattedData;
     } else {
       const { data, error } = await supabase

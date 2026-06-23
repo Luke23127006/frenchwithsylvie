@@ -127,9 +127,16 @@ export default function StudentDashboardClient({ assignments }: StudentDashboard
                     </div>
                   )}
                 </div>
-                <CardDescription className="flex items-center justify-between mt-2">
-                  <span>Posted on {new Date(assignment.created_at).toLocaleDateString()}</span>
-                </CardDescription>
+                <div className="flex flex-col gap-2 mt-2">
+                  <CardDescription>
+                    Posted on {new Date(assignment.created_at).toLocaleDateString()}
+                  </CardDescription>
+                  {isSubmitted && (
+                    <div className={`self-start text-xs font-semibold px-2.5 py-1 rounded-md ${assignment.grade !== null ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {assignment.grade !== null ? `Score: ${assignment.grade}/100` : "Not graded yet"}
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="flex-1 flex items-end">
                 <Button 
