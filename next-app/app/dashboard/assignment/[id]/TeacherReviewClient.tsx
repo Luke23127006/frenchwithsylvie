@@ -62,6 +62,14 @@ interface Assignee extends Student {
   submission: Submission | null;
 }
 
+interface AssignmentAttachment {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: 'document' | 'audio';
+  order_index: number;
+}
+
 interface TeacherReviewClientProps {
   assignmentData: {
     id: string;
@@ -71,6 +79,7 @@ interface TeacherReviewClientProps {
     submission_format: 'DOCUMENT' | 'AUDIO' | 'BOTH';
     created_at: string;
     assignees: Assignee[];
+    assignment_attachments?: AssignmentAttachment[];
   };
   allStudents: Student[];
 }
@@ -266,8 +275,27 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          {assignmentData.file_url && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {(() => {
+            const attachments = assignmentData.assignment_attachments || [];
+            const sortedAttachments = [...attachments].sort((a: any, b: any) => a.order_index - b.order_index);
+            
+            return sortedAttachments.map((att: any, idx: number) => (
+              <Button key={att.id || idx} variant="outline" asChild>
+                <a href={att.file_url} target="_blank" rel="noopener noreferrer">
+                  {att.file_type === 'document' ? (
+                    <FileText className="mr-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <Mic className="mr-2 h-4 w-4 text-indigo-600" />
+                  )}
+                  {att.file_name}
+                </a>
+              </Button>
+            ));
+          })()}
+          
+          {/* Legacy fallback */}
+          {(!assignmentData.assignment_attachments || assignmentData.assignment_attachments.length === 0) && assignmentData.file_url && (
             <Button variant="outline" asChild>
               <a href={assignmentData.file_url} target="_blank" rel="noopener noreferrer">
                 <FileText className="mr-2 h-4 w-4 text-blue-600" />
@@ -275,6 +303,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
               </a>
             </Button>
           )}
+          
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">Edit Assignees</Button>

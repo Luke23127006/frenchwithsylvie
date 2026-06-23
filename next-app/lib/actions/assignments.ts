@@ -206,11 +206,17 @@ export const getAssignmentById = createSafeAction(
   z.object({ id: z.string() }),
   [], // both
   async ({ input, user, supabase }) => {
-    const { data, error } = await supabase
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data, error } = await adminSupabase
       .from("assignments")
       .select(`
         *,
-        assignment_assignees(student_id)
+        assignment_assignees(student_id),
+        assignment_attachments(*)
       `)
       .eq("id", input.id)
       .is("deleted_at", null)
@@ -242,15 +248,15 @@ export const getAssignmentDetailsForTeacher = createSafeAction(
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const { data: assignment, error: assignmentError } = await supabase
+    const { data: assignment, error: assignmentError } = await adminSupabase
       .from("assignments")
-      .select("*")
+      .select("*, assignment_attachments(*)")
       .eq("id", input.assignmentId)
       .single();
 
     if (assignmentError) throw new Error(assignmentError.message);
 
-    const { data: assigneesData, error: assigneesError } = await supabase
+    const { data: assigneesData, error: assigneesError } = await adminSupabase
       .from("assignment_assignees")
       .select(`
         student_id,

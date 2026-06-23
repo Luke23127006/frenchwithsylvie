@@ -17,6 +17,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { CSS } from '@dnd-kit/utilities';
 import { v4 as uuidv4 } from "uuid";
 import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
+import Link from "next/link";
 
 
 
@@ -38,6 +39,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [selectedPreviewAttId, setSelectedPreviewAttId] = useState<string | null>(null);
+  const [selectedAssignmentAttId, setSelectedAssignmentAttId] = useState<string | null>(null);
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -154,13 +156,33 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
     };
   };
 
-  // Safe checks for arrays
+  useEffect(() => {
+    // Select first document attachment as preview when switching to submission mode
+    if (viewMode === 'submission' && submission?.submission_attachments) {
+      const firstDoc = submission.submission_attachments.find((a: any) => a.file_type === 'document');
+      if (firstDoc) setSelectedPreviewAttId(firstDoc.id);
+      else setSelectedPreviewAttId(null);
+    }
+    // Select first document attachment as preview when switching to assignment mode
+    if (viewMode === 'assignment' && assignment?.assignment_attachments) {
+      const firstDoc = assignment.assignment_attachments.find((a: any) => a.file_type === 'document');
+      if (firstDoc) setSelectedAssignmentAttId(firstDoc.id);
+      else setSelectedAssignmentAttId(null);
+    }
+  }, [viewMode, submission, assignment]);
+  
+  // Safe checks for submission arrays
   const submittedAttachments = submission?.submission_attachments || [];
   const submittedDocs = submittedAttachments.filter((a: any) => a.file_type === 'document');
   const submittedAudios = submittedAttachments.filter((a: any) => a.file_type === 'audio');
   
+  // Safe checks for assignment arrays
+  const assignmentAttachments = assignment?.assignment_attachments?.sort((a: any, b: any) => a.order_index - b.order_index) || [];
+  const assignmentDocs = assignmentAttachments.filter((a: any) => a.file_type === 'document');
+  const assignmentAudios = assignmentAttachments.filter((a: any) => a.file_type === 'audio');
+
   const previewUrl = viewMode === "assignment" 
-    ? assignment.file_url 
+    ? (assignmentDocs.find((a: any) => a.id === selectedAssignmentAttId)?.file_url || assignmentDocs[0]?.file_url)
     : (submittedDocs.find((a: any) => a.id === selectedPreviewAttId)?.file_url || submittedDocs[0]?.file_url);
 
   return (
@@ -169,7 +191,14 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
       <div className="w-full md:w-[60%] border-r bg-white p-4 md:p-8 flex flex-col h-[50vh] md:h-full">
         <div className="flex justify-between items-start mb-4 flex-wrap gap-4">
           <div className="flex flex-col gap-3">
-            <h1 className="text-2xl font-bold">{assignment.title}</h1>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" asChild className="h-8 w-8 -ml-2 shrink-0">
+                <Link href="/student">
+                  <ArrowLeft className="h-5 w-5 text-slate-500 hover:text-slate-900" />
+                </Link>
+              </Button>
+              <h1 className="text-2xl font-bold">{assignment.title}</h1>
+            </div>
             {isFullySubmitted() && (
               <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
                 <Button 
@@ -201,16 +230,34 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           )}
         </div>
 
-        {viewMode === "assignment" && assignment.audio_urls && assignment.audio_urls.length > 0 && (
+        {viewMode === "assignment" && assignmentAudios.length > 0 && (
           <div className="mb-4 space-y-3">
             <h3 className="font-semibold text-slate-700">Listening Audio</h3>
             <div className="flex flex-col gap-2">
-              {assignment.audio_urls.map((audioUrl: string, index: number) => (
-                <audio key={index} controls className="w-full h-10" src={audioUrl}>
-                  Your browser does not support the audio element.
-                </audio>
+              {assignmentAudios.map((att: any, index: number) => (
+                <div key={att.id} className="flex flex-col gap-1">
+                  <span className="text-sm text-slate-500 font-medium">{att.file_name}</span>
+                  <audio controls className="w-full h-10" src={att.file_url}>
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Thumbnail Selector for Multiple Documents in Assignment Mode */}
+        {viewMode === "assignment" && assignmentDocs.length > 1 && (
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+            {assignmentDocs.map((att: any, index: number) => (
+              <button 
+                key={att.id}
+                onClick={() => setSelectedAssignmentAttId(att.id)}
+                className={`flex-shrink-0 px-4 py-2 rounded-md border text-sm font-medium transition-colors ${selectedAssignmentAttId === att.id ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white hover:bg-slate-50 text-slate-600'}`}
+              >
+                {att.file_name || `Document ${index + 1}`}
+              </button>
+            ))}
           </div>
         )}
 
