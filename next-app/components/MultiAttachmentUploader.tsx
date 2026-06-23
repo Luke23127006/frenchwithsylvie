@@ -97,6 +97,7 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isCombining, setIsCombining] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -207,6 +208,36 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
     return `${m}:${s}`;
   };
 
+  const imageAttachments = attachments.filter(a => a.file && a.file.type.startsWith('image/'));
+  const canCombineToPdf = imageAttachments.length >= 2;
+
+  const handleCombineImages = async () => {
+    setIsCombining(true);
+    try {
+      const { convertImagesToPDF } = await import('@/lib/pdf');
+      const filesToCombine = imageAttachments.map(a => a.file!);
+      const pdfFile = await convertImagesToPDF(filesToCombine);
+      
+      const imageIds = new Set(imageAttachments.map(a => a.id));
+      
+      const newAtt: StagedAttachment = {
+        id: uuidv4(),
+        type: 'document',
+        file: pdfFile,
+        url: URL.createObjectURL(pdfFile),
+        name: pdfFile.name
+      };
+      
+      setAttachments(prev => [...prev.filter(a => !imageIds.has(a.id)), newAtt]);
+      toast.success("Images combined successfully!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to combine images");
+    } finally {
+      setIsCombining(false);
+    }
+  };
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
   }, []);
@@ -286,6 +317,20 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
           </Card>
         )}
       </div>
+
+      {canCombineToPdf && (
+        <div className="flex justify-end mb-2 animate-in fade-in">
+          <Button 
+            type="button" 
+            variant="secondary" 
+            onClick={handleCombineImages}
+            disabled={isUploading || isCombining}
+            className="w-full bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 shadow-sm"
+          >
+            {isCombining ? "Combining..." : `Combine ${imageAttachments.length} Images to single PDF`}
+          </Button>
+        </div>
+      )}
 
       {/* Sortable Attachments List */}
       {attachments.length > 0 && (
