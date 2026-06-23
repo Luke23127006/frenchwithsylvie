@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useRef } from "react";
-import { Upload, CheckCircle2, GraduationCap, FileText, ArrowLeft, ArrowRight, RefreshCw, Mic, Square, Trash2, GripVertical, FileAudio, File as FileIcon, Plus } from "lucide-react";
+import { Upload, CheckCircle2, GraduationCap, FileText, ArrowLeft, ArrowRight, RefreshCw, Mic, Square, Trash2, GripVertical, FileAudio, File as FileIcon, Plus, Play, Pause, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,10 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [selectedPreviewAttId, setSelectedPreviewAttId] = useState<string | null>(null);
   const [selectedAssignmentAttId, setSelectedAssignmentAttId] = useState<string | null>(null);
+  
+  const [activeAudioTrack, setActiveAudioTrack] = useState<any>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -118,13 +122,29 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           throw new Error(submitResult.error);
         }
 
-        setSubmission(submitResult.data?.[0]);
+        const newSubmission = submitResult.data?.[0];
+        if (newSubmission) {
+          // Hydrate the new submission with the newly uploaded attachments 
+          // so the frontend renders them immediately without a refresh.
+          newSubmission.submission_attachments = uploadedAttachments.map((att, i) => ({
+            id: `temp-${Date.now()}-${i}`,
+            file_name: att.fileName,
+            file_url: att.fileUrl,
+            file_type: att.fileType,
+            order_index: att.orderIndex
+          }));
+          setSubmission(newSubmission);
+          setViewMode("submission");
+        }
+
         setStagedAttachments([]); // Clear staging area
+        setUploadProgress({}); // Clear progress
         setIsUploading(false);
         toast.success("Submission successful!");
       } catch (error: any) {
         toast.error(`Error: ${error.message}`);
         setIsUploading(false);
+        setUploadProgress({}); // Clear progress on error to reset
       }
     });
   };
@@ -157,19 +177,56 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   };
 
   useEffect(() => {
-    // Select first document attachment as preview when switching to submission mode
     if (viewMode === 'submission' && submission?.submission_attachments) {
       const firstDoc = submission.submission_attachments.find((a: any) => a.file_type === 'document');
-      if (firstDoc) setSelectedPreviewAttId(firstDoc.id);
-      else setSelectedPreviewAttId(null);
+      setSelectedPreviewAttId(firstDoc ? firstDoc.id : null);
+
+      const audios = submission.submission_attachments.filter((a: any) => a.file_type === 'audio').sort((a: any, b: any) => a.order_index - b.order_index);
+      setActiveAudioTrack(audios.length > 0 ? audios[0] : null);
     }
-    // Select first document attachment as preview when switching to assignment mode
+    
     if (viewMode === 'assignment' && assignment?.assignment_attachments) {
       const firstDoc = assignment.assignment_attachments.find((a: any) => a.file_type === 'document');
-      if (firstDoc) setSelectedAssignmentAttId(firstDoc.id);
-      else setSelectedAssignmentAttId(null);
+      setSelectedAssignmentAttId(firstDoc ? firstDoc.id : null);
+
+      const audios = assignment.assignment_attachments.filter((a: any) => a.file_type === 'audio').sort((a: any, b: any) => a.order_index - b.order_index);
+      setActiveAudioTrack(audios.length > 0 ? audios[0] : null);
     }
   }, [viewMode, submission, assignment]);
+
+  const togglePlay = (track: any) => {
+    if (activeAudioTrack?.id === track.id) {
+      if (isPlaying) {
+        audioRef.current?.pause();
+      } else {
+        audioRef.current?.play();
+      }
+    } else {
+      setActiveAudioTrack(track);
+      // Let the useEffect handle play when src changes, or call it directly after a timeout
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.play().catch(e => console.error("Playback failed:", e));
+        }
+      }, 50);
+    }
+  };
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    
+    return () => {
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+    };
+  }, [activeAudioTrack]);
   
   // Safe checks for submission arrays
   const submittedAttachments = submission?.submission_attachments || [];
@@ -188,8 +245,8 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   return (
     <div className="h-[calc(100vh-65px)] bg-slate-50 flex flex-col md:flex-row">
       {/* Left/Top Area: Document Viewer (60%) */}
-      <div className="w-full md:w-[60%] border-r bg-white p-4 md:p-8 flex flex-col h-[50vh] md:h-full">
-        <div className="flex justify-between items-start mb-4 flex-wrap gap-4">
+      <div className="w-full md:w-[60%] border-r bg-white p-4 md:p-8 flex flex-col h-[50vh] md:h-[calc(100vh-65px)] overflow-y-auto relative custom-scrollbar">
+        <div className="flex justify-between items-start mb-4 flex-wrap gap-4 shrink-0">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" asChild className="h-8 w-8 -ml-2 shrink-0">
@@ -200,55 +257,99 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
               <h1 className="text-2xl font-bold">{assignment.title}</h1>
             </div>
             {isFullySubmitted() && (
-              <div className="flex bg-slate-100 p-1 rounded-lg w-fit">
+              <div className="flex bg-slate-100 p-1.5 rounded-xl w-fit mt-1">
                 <Button 
                   variant={viewMode === "assignment" ? "default" : "ghost"}
-                  size="sm"
+                  size="lg"
                   onClick={() => setViewMode("assignment")}
-                  className="rounded-md"
+                  className={`rounded-lg font-semibold text-base px-6 ${viewMode === "assignment" ? "shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
                 >
                   Assignment
                 </Button>
                 <Button 
                   variant={viewMode === "submission" ? "default" : "ghost"}
-                  size="sm"
+                  size="lg"
                   onClick={() => setViewMode("submission")}
-                  className="rounded-md"
+                  className={`rounded-lg font-semibold text-base px-6 ${viewMode === "submission" ? "shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
                 >
                   My Submission
                 </Button>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Master Audio Player */}
+        {activeAudioTrack && (
+          <div className="shrink-0 bg-white border rounded-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] p-3 flex items-center gap-4 animate-in fade-in mb-4">
+            <div className="bg-indigo-100 p-2.5 rounded-lg shrink-0">
+              <FileAudio className="h-5 w-5 text-indigo-700" />
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <p className="text-sm font-semibold text-slate-800 truncate mb-1 px-1">{activeAudioTrack.file_name}</p>
+              <audio 
+                ref={audioRef}
+                controls 
+                className="w-full h-8 outline-none [&::-webkit-media-controls-panel]:bg-slate-50" 
+                src={activeAudioTrack.file_url}
+              >
+                Your browser does not support the audio element.
+              </audio>
+            </div>
+          </div>
+        )}
+
+        {(viewMode === "assignment" ? assignmentAudios : submittedAudios).length > 0 && (
+          <div className="mb-4 space-y-3 shrink-0">
+            <h3 className="font-semibold text-slate-700">
+              {viewMode === "assignment" ? "Listening Audio" : "My Speaking Audios"}
+            </h3>
+            <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+              {(viewMode === "assignment" ? assignmentAudios : submittedAudios).map((att: any, index: number) => {
+                const isCurrent = activeAudioTrack?.id === att.id;
+                return (
+                  <div 
+                    key={att.id} 
+                    onClick={() => togglePlay(att)}
+                    className={`flex-shrink-0 flex items-center gap-3 p-2 pr-4 rounded-md cursor-pointer transition-colors border ${isCurrent ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-transparent hover:bg-slate-100 hover:border-slate-200'}`}
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className={`p-1.5 rounded-full ${isCurrent ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
+                        {isCurrent && isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
+                      </div>
+                      <span className={`text-sm font-medium whitespace-nowrap ${isCurrent ? 'text-indigo-900' : 'text-slate-700'}`}>
+                        {att.file_name}
+                      </span>
+                    </div>
+                    {isCurrent && isPlaying && (
+                      <div className="flex gap-1 items-end h-4 ml-2">
+                        <span className="w-1 bg-indigo-400 animate-pulse h-full rounded-t-sm"></span>
+                        <span className="w-1 bg-indigo-400 animate-pulse h-2/3 rounded-t-sm" style={{ animationDelay: '150ms' }}></span>
+                        <span className="w-1 bg-indigo-400 animate-pulse h-4/5 rounded-t-sm" style={{ animationDelay: '300ms' }}></span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center mb-3 shrink-0 mt-2">
+          <h3 className="font-semibold text-slate-700">Document Preview</h3>
           {previewUrl && (
-            <Button variant="outline" asChild>
+            <Button variant="outline" size="sm" asChild className="h-8">
               <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                <FileText className="mr-2 h-4 w-4 text-blue-600" />
+                <FileText className="mr-2 h-3.5 w-3.5 text-blue-600" />
                 View Full
               </a>
             </Button>
           )}
         </div>
 
-        {viewMode === "assignment" && assignmentAudios.length > 0 && (
-          <div className="mb-4 space-y-3">
-            <h3 className="font-semibold text-slate-700">Listening Audio</h3>
-            <div className="flex flex-col gap-2">
-              {assignmentAudios.map((att: any, index: number) => (
-                <div key={att.id} className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-500 font-medium">{att.file_name}</span>
-                  <audio controls className="w-full h-10" src={att.file_url}>
-                    Your browser does not support the audio element.
-                  </audio>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Thumbnail Selector for Multiple Documents in Assignment Mode */}
         {viewMode === "assignment" && assignmentDocs.length > 1 && (
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2 shrink-0 custom-scrollbar">
             {assignmentDocs.map((att: any, index: number) => (
               <button 
                 key={att.id}
@@ -261,25 +362,9 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           </div>
         )}
 
-        {viewMode === "submission" && submittedAudios.length > 0 && (
-          <div className="mb-4 space-y-3">
-            <h3 className="font-semibold text-slate-700">My Speaking Audio</h3>
-            <div className="flex flex-col gap-2">
-              {submittedAudios.map((att: any) => (
-                <div key={att.id} className="flex flex-col gap-1">
-                  <span className="text-sm text-slate-500 font-medium">{att.file_name}</span>
-                  <audio controls className="w-full h-10" src={att.file_url}>
-                    Your browser does not support the audio element.
-                  </audio>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Thumbnail Selector for Multiple Documents in Submission Mode */}
         {viewMode === "submission" && submittedDocs.length > 1 && (
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2 shrink-0 custom-scrollbar">
             {submittedDocs.map((att: any, index: number) => (
               <button 
                 key={att.id}
@@ -292,7 +377,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
           </div>
         )}
 
-        <div className="flex-1 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative">
+        <div className="flex-1 min-h-[40vh] md:min-h-[400px] lg:min-h-[500px] bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden relative mb-4 shrink-0 group">
           {previewUrl ? (
             <iframe 
               src={previewUrl} 
