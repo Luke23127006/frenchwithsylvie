@@ -11,19 +11,27 @@ import { createClient } from "@supabase/supabase-js";
 export const createAssignment = createSafeAction(
   z.object({
     title: z.string().min(1),
-    fileUrl: z.string().nullable(),
-    audioUrls: z.array(z.string()),
+    attachments: z.array(z.object({
+      fileUrl: z.string(),
+      fileName: z.string(),
+      fileType: z.enum(['document', 'audio']),
+      orderIndex: z.number()
+    })),
     submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"]),
     assigneeIds: z.array(z.string()),
   }),
   ["teacher"],
   async ({ input, supabase, user }) => {
+    // We need adminSupabase to bypass RLS for inserting into assignment_attachments if standard policies don't permit it
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
       .insert([{ 
         title: input.title, 
-        file_url: input.fileUrl, 
-        audio_urls: input.audioUrls,
         submission_format: input.submissionFormat,
         created_by: user.id
       }])
@@ -32,6 +40,26 @@ export const createAssignment = createSafeAction(
     if (assignmentError) throw new Error(assignmentError.message);
 
     const assignmentId = assignmentData[0].id;
+    
+    // Insert attachments into the new assignment_attachments table
+    if (input.attachments && input.attachments.length > 0) {
+      const attachmentsToInsert = input.attachments.map(att => ({
+        assignment_id: assignmentId,
+        file_name: att.fileName,
+        file_url: att.fileUrl,
+        file_type: att.fileType,
+        order_index: att.orderIndex
+      }));
+      
+      const { error: attachmentsError } = await adminSupabase
+        .from("assignment_attachments")
+        .insert(attachmentsToInsert);
+        
+      if (attachmentsError) {
+        console.error("Failed to insert attachments:", attachmentsError);
+        throw new Error("Failed to save assignment attachments: " + attachmentsError.message);
+      }
+    }
     
     if (input.assigneeIds && input.assigneeIds.length > 0) {
       const assigneesToInsert = input.assigneeIds.map(id => ({
@@ -52,11 +80,6 @@ export const createAssignment = createSafeAction(
           try {
             const resend = new Resend(resendApiKey);
             const { createClient } = await import('@supabase/supabase-js');
-            const adminSupabase = createClient(
-              process.env.NEXT_PUBLIC_SUPABASE_URL!,
-              process.env.SUPABASE_SERVICE_ROLE_KEY!
-            );
-            
             const { data: studentsData, error: queryError } = await adminSupabase
               .from("users")
               .select(`

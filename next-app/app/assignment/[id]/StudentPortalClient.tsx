@@ -16,69 +16,9 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { v4 as uuidv4 } from "uuid";
+import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
 
-interface StagedAttachment {
-  id: string;
-  type: 'document' | 'audio';
-  file?: File;
-  blob?: Blob;
-  url: string;
-  name: string;
-}
 
-function SortableAttachmentItem({ item, onRemove, onRename }: { item: StagedAttachment, onRemove: (id: string) => void, onRename: (id: string, name: string) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-
-  return (
-    <div ref={setNodeRef} style={style} className="flex flex-col gap-3 p-4 border rounded-xl bg-white mb-3 shadow-sm hover:bg-slate-50 transition-colors group">
-      {/* Row 1: File Management */}
-      <div className="flex items-center gap-3 w-full">
-        {/* Drag Handle */}
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 flex-shrink-0">
-          <GripVertical className="h-5 w-5" />
-        </div>
-        
-        {/* Icon */}
-        <div className="flex-shrink-0 w-10 h-10 bg-slate-100 rounded-md flex items-center justify-center text-slate-500 overflow-hidden">
-          {item.type === 'document' ? (
-             item.file?.type.startsWith('image/') ? (
-               <img src={item.url} alt="preview" className="w-full h-full object-cover" />
-             ) : <FileIcon className="h-5 w-5" />
-          ) : <FileAudio className="h-5 w-5" />}
-        </div>
-        
-        {/* File Name Input */}
-        <div className="flex-grow min-w-0">
-          <Input 
-            value={item.name}
-            onChange={(e) => onRename(item.id, e.target.value)}
-            className="h-9 text-sm border-transparent hover:border-slate-200 focus:border-blue-300 px-2 bg-transparent w-full"
-            placeholder="Attachment name"
-          />
-        </div>
-        
-        {/* Delete Button */}
-        <Button 
-          type="button" 
-          variant="ghost" 
-          size="icon" 
-          className="flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 sm:opacity-50 group-hover:opacity-100 transition-opacity" 
-          onClick={() => onRemove(item.id)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Row 2: Audio Player (Only for audio types) */}
-      {item.type === 'audio' && (
-        <div className="w-full mt-1">
-          <audio src={item.url} controls className="w-full h-12" />
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface StudentPortalClientProps {
   assignment: any;
@@ -99,144 +39,10 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
   const [viewMode, setViewMode] = useState<"assignment" | "submission">("assignment");
   const [selectedPreviewAttId, setSelectedPreviewAttId] = useState<string | null>(null);
   
+  const [isRecording, setIsRecording] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Audio Recording States
-  const [recordState, setRecordState] = useState<"idle" | "recording">("idle");
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  useEffect(() => {
-    if (!isUploading) return;
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      const message = "Files are still uploading. Are you sure you want to leave and cancel the upload?";
-      e.returnValue = message; 
-      return message;
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [isUploading]);
-
-  useEffect(() => {
-    // Select first document attachment as preview when switching to submission mode
-    if (viewMode === 'submission' && submission?.submission_attachments) {
-      const firstDoc = submission.submission_attachments.find((a: any) => a.file_type === 'document');
-      if (firstDoc) setSelectedPreviewAttId(firstDoc.id);
-      else setSelectedPreviewAttId(null);
-    }
-  }, [viewMode, submission]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (active.id !== over?.id) {
-      setStagedAttachments((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over?.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
-
-  const addFiles = (files: File[]) => {
-    const newAtts: StagedAttachment[] = files.map(file => ({
-      id: uuidv4(),
-      type: file.type.startsWith('audio/') ? 'audio' : 'document',
-      file,
-      url: URL.createObjectURL(file),
-      name: file.name
-    }));
-    setStagedAttachments(prev => [...prev, ...newAtts]);
-  };
-
-  const removeAttachment = (id: string) => {
-    setStagedAttachments(prev => {
-      const item = prev.find(i => i.id === id);
-      if (item) URL.revokeObjectURL(item.url);
-      return prev.filter(i => i.id !== id);
-    });
-  };
-
-  const renameAttachment = (id: string, newName: string) => {
-    setStagedAttachments(prev => prev.map(item => item.id === id ? { ...item, name: newName } : item));
-  };
-
-  // Safari/iOS MediaRecorder Support
-  const getSupportedMimeType = () => {
-    if (typeof MediaRecorder === 'undefined') return '';
-    if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm';
-    if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4';
-    if (MediaRecorder.isTypeSupported('audio/mpeg')) return 'audio/mpeg';
-    return '';
-  };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = getSupportedMimeType();
-      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const finalMimeType = mediaRecorder.mimeType || "audio/mp4"; // Fallback
-        const blob = new Blob(audioChunksRef.current, { type: finalMimeType });
-        const ext = finalMimeType.includes("mp4") ? "m4a" : (finalMimeType.includes("webm") ? "webm" : "mp3");
-        const filename = `Recording - ${new Date().toLocaleTimeString()}.${ext}`;
-        
-        const newAtt: StagedAttachment = {
-          id: uuidv4(),
-          type: 'audio',
-          blob,
-          url: URL.createObjectURL(blob),
-          name: filename
-        };
-        setStagedAttachments(prev => [...prev, newAtt]);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start();
-      setRecordState("recording");
-      setRecordingTime(0);
-      timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
-    } catch (err: any) {
-      toast.error("Microphone access denied or not available.");
-      console.error(err);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
-      if (timerRef.current) clearInterval(timerRef.current);
-      setRecordState("idle");
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -467,75 +273,21 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                
-                {/* Actions Grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="relative border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50 transition-colors rounded-lg flex flex-col items-center justify-center p-4 cursor-pointer text-blue-600 bg-white group">
-                    <Input 
-                      type="file" 
-                      multiple
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      onChange={(e) => {
-                        addFiles(Array.from(e.target.files || []));
-                        if (e.target) e.target.value = '';
-                      }}
-                    />
-                    <Upload className="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
-                    <span className="text-sm font-semibold">Upload Files</span>
-                  </div>
-
-                  <div 
-                    onClick={recordState === "idle" ? startRecording : stopRecording}
-                    className={`relative border-2 border-dashed transition-colors rounded-lg flex flex-col items-center justify-center p-4 cursor-pointer group ${recordState === 'idle' ? 'border-slate-300 hover:border-red-400 hover:bg-red-50 text-red-600 bg-white' : 'border-red-500 bg-red-100 text-red-600'}`}
-                  >
-                    {recordState === 'idle' ? (
-                      <>
-                        <Mic className="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
-                        <span className="text-sm font-semibold">Record Audio</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-6 h-6 mb-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-sm font-bold tracking-widest">{formatTime(recordingTime)}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Staged Attachments List */}
-                {stagedAttachments.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-slate-600 font-semibold">Your Attachments ({stagedAttachments.length})</Label>
-                    <div className="bg-slate-50 p-2 rounded-xl border">
-                      <DndContext 
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
-                      >
-                        <SortableContext 
-                          items={stagedAttachments.map(i => i.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {stagedAttachments.map((item) => (
-                            <SortableAttachmentItem 
-                              key={item.id} 
-                              item={item} 
-                              onRemove={removeAttachment}
-                              onRename={renameAttachment}
-                            />
-                          ))}
-                        </SortableContext>
-                      </DndContext>
-                    </div>
-                  </div>
-                )}
+                <MultiAttachmentUploader
+                  attachments={stagedAttachments}
+                  setAttachments={setStagedAttachments}
+                  uploadProgress={uploadProgress}
+                  isUploading={isUploading}
+                  allowRecord={true}
+                  onRecordingChange={setIsRecording}
+                />
 
                 {/* Submit Button */}
                 <Button 
                   type="button" 
                   onClick={handleSubmit}
                   className="w-full text-lg h-14 rounded-full mt-4" 
-                  disabled={isPending || isUploading || stagedAttachments.length === 0 || recordState === "recording"}
+                  disabled={isPending || isUploading || stagedAttachments.length === 0 || isRecording}
                 >
                   {isUploading ? "Uploading..." : isPending ? "Submitting..." : (
                     <><CheckCircle2 className="mr-2 h-5 w-5" /> Submit Assignment</>

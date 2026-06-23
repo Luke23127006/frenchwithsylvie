@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { Copy, Plus, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Mic, FileAudio } from "lucide-react";
+import { Copy, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Plus, Mic, FileAudio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
 import { getSignedUploadUrls } from "@/lib/actions/storage";
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
 
 interface Student {
   id: string;
@@ -42,8 +43,7 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ assignments, students, trashedAssignments = [] }: DashboardClientProps) {
   const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [audioFiles, setAudioFiles] = useState<File[]>([]);
+  const [stagedAttachments, setStagedAttachments] = useState<StagedAttachment[]>([]);
   const [submissionFormat, setSubmissionFormat] = useState<"DOCUMENT" | "AUDIO" | "BOTH">("DOCUMENT");
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,6 +51,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [isPending, startTransition] = useTransition();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
     if (!isUploading) return;
@@ -102,85 +103,61 @@ export default function DashboardClient({ assignments, students, trashedAssignme
     setUploadProgress({});
 
     try {
-      // 1. Prepare files
-      const allFiles: { file: File; bucketName: string }[] = [];
-      if (file) {
-        allFiles.push({ file, bucketName: "assignments" });
-      }
-      for (const audio of audioFiles) {
-        allFiles.push({ file: audio, bucketName: "assignments" });
-      }
+      const uploadedAttachments: { fileName: string, fileUrl: string, fileType: "document" | "audio", orderIndex: number }[] = [];
 
-      // 2. Request Signed URLs and Upload if files exist
-      let fileUrl: string | null = null;
-      const audioUrls: string[] = [];
-
-      if (allFiles.length > 0) {
-        const fileMetadata = allFiles.map(f => ({ fileName: f.file.name, bucketName: f.bucketName }));
+      for (let i = 0; i < stagedAttachments.length; i++) {
+        const att = stagedAttachments[i];
+        const fileToUpload = att.file || new File([att.blob!], att.name, { type: att.blob!.type });
+        
+        const fileMetadata = [{ fileName: fileToUpload.name, bucketName: "assignments" }];
         const signedUrlResult = await getSignedUploadUrls({ files: fileMetadata });
         
-        if (signedUrlResult.error) {
-          toast.error(`Failed to initialize upload: ${signedUrlResult.error}`);
-          setIsUploading(false);
-          return;
+        if (signedUrlResult.error || !signedUrlResult.data) {
+          throw new Error(`Failed to initialize upload for ${att.name}`);
         }
 
-        const signedUrls = signedUrlResult.data;
-        if (!signedUrls) {
-          toast.error("Upload initialization failed");
-          setIsUploading(false);
-          return;
-        }
+        const { path, token, publicUrl } = signedUrlResult.data[0];
+        const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/assignments/${path}?token=${token}`;
 
-        // 3. Upload files directly to Supabase in parallel via XHR for progress tracking
-        const uploadPromises = allFiles.map((f, index) => {
-          return new Promise<void>((resolve, reject) => {
-            const { path, token, publicUrl } = signedUrls[index];
-            const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/${f.bucketName}/${path}?token=${token}`;
-          
+        await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open("PUT", url, true);
           xhr.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
           xhr.setRequestHeader("Authorization", `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`);
-          xhr.setRequestHeader("Content-Type", f.file.type || "application/octet-stream");
+          xhr.setRequestHeader("Content-Type", fileToUpload.type || "application/octet-stream");
 
           xhr.upload.onprogress = (event) => {
             if (event.lengthComputable) {
               const percentage = Math.round((event.loaded / event.total) * 100);
-              setUploadProgress(prev => ({
-                ...prev,
-                [f.file.name]: percentage
-              }));
+              setUploadProgress(prev => ({ ...prev, [att.name]: percentage }));
             }
           };
 
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-              if (f.file === file) {
-                fileUrl = publicUrl;
-              } else {
-                audioUrls.push(publicUrl);
-              }
-              setUploadProgress(prev => ({ ...prev, [f.file.name]: 100 }));
+              setUploadProgress(prev => ({ ...prev, [att.name]: 100 }));
               resolve();
             } else {
-              reject(new Error(`Failed to upload ${f.file.name}: ${xhr.statusText}`));
+              reject(new Error(`Failed to upload ${att.name}`));
             }
           };
-
-          xhr.onerror = () => reject(new Error(`Network error uploading ${f.file.name}`));
-          xhr.send(f.file);
+          xhr.onerror = () => reject(new Error(`Network error uploading ${att.name}`));
+          xhr.send(fileToUpload);
         });
-      });
-      await Promise.all(uploadPromises);
+
+        uploadedAttachments.push({
+          fileName: att.name,
+          fileUrl: publicUrl,
+          fileType: att.type,
+          orderIndex: i
+        });
       }
 
       // 4. Create assignment
       startTransition(async () => {
         const createResult = await createAssignment({ 
           title, 
-          fileUrl, 
-          audioUrls, 
+          attachments: uploadedAttachments, 
           submissionFormat, 
           assigneeIds: selectedStudents 
         });
@@ -192,14 +169,9 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
         toast.success("Assignment created successfully!");
         setTitle("");
-        setFile(null);
-        setAudioFiles([]);
+        setStagedAttachments([]);
         setSubmissionFormat("DOCUMENT");
         setSelectedStudents([]);
-        const fileInput = document.getElementById('document') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-        const audioInput = document.getElementById('audio') as HTMLInputElement;
-        if (audioInput) audioInput.value = '';
         
         setIsUploading(false);
         setUploadProgress({});
@@ -331,57 +303,24 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   </div>
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="document">Instruction Material (PDF/Image) - Optional</Label>
-                <Input 
-                  id="document" 
-                  type="file" 
-                  accept=".pdf,image/*"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  disabled={isPending || isUploading}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="audio">Reference Audio - Optional</Label>
-                <Input 
-                  id="audio" 
-                  type="file" 
-                  multiple
-                  accept="audio/*"
-                  onChange={(e) => setAudioFiles(Array.from(e.target.files || []))}
-                  disabled={isPending || isUploading}
-                />
-              </div>
+              <MultiAttachmentUploader
+                attachments={stagedAttachments}
+                setAttachments={setStagedAttachments}
+                uploadProgress={uploadProgress}
+                isUploading={isUploading}
+                allowRecord={false}
+                onRecordingChange={setIsRecording}
+              />
               <Button 
                 type="button" 
                 onClick={(e: any) => handleCreateAssignment(e)} 
                 className="w-full md:w-auto" 
-                disabled={isPending || isUploading}
+                disabled={isPending || isUploading || isRecording}
               >
                 <Plus className="mr-2 h-4 w-4" /> {isUploading ? "Uploading..." : isPending ? "Creating..." : "Create Assignment"}
               </Button>
               
-              {Object.entries(uploadProgress).length > 0 && (
-                <div className="space-y-3 mt-6 p-4 border rounded-md bg-secondary/20">
-                  <p className="text-sm font-medium mb-1 flex items-center">
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Uploading Files...
-                  </p>
-                  {Object.entries(uploadProgress).map(([filename, progress]) => (
-                    <div key={filename} className="space-y-1.5">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span className="truncate max-w-[200px]">{filename}</span>
-                        <span>{progress}%</span>
-                      </div>
-                      <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-primary h-full transition-all duration-300"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+
             </form>
           </CardContent>
         </Card>
