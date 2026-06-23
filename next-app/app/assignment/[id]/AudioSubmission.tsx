@@ -184,7 +184,17 @@ export default function AudioSubmission({ assignmentId, onSuccess }: AudioSubmis
 
       // 3. Save submission
       startTransition(async () => {
-        const submitResult = await submitSolution({ assignmentId, audioUrl: publicUrl });
+        const submitResult = await submitSolution({ 
+          assignmentId, 
+          attachments: [
+            {
+              fileName: "Recorded Audio.webm",
+              fileUrl: publicUrl,
+              fileType: "audio",
+              orderIndex: 0
+            }
+          ]
+        });
         if (submitResult.error) {
           toast.error(`Submission failed: ${submitResult.error}`);
           setIsUploading(false);

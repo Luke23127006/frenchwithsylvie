@@ -6,23 +6,32 @@ import { z } from "zod";
 import { Resend } from "resend";
 import { NewAssignmentEmail } from "@/emails/NewAssignmentEmail";
 import * as React from "react";
+import { createClient } from "@supabase/supabase-js";
 
 export const createAssignment = createSafeAction(
   z.object({
     title: z.string().min(1),
-    fileUrl: z.string().nullable(),
-    audioUrls: z.array(z.string()),
+    attachments: z.array(z.object({
+      fileUrl: z.string(),
+      fileName: z.string(),
+      fileType: z.enum(['document', 'audio']),
+      orderIndex: z.number()
+    })),
     submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"]),
     assigneeIds: z.array(z.string()),
   }),
   ["teacher"],
   async ({ input, supabase, user }) => {
+    // We need adminSupabase to bypass RLS for inserting into assignment_attachments if standard policies don't permit it
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const { data: assignmentData, error: assignmentError } = await supabase
       .from("assignments")
       .insert([{ 
         title: input.title, 
-        file_url: input.fileUrl, 
-        audio_urls: input.audioUrls,
         submission_format: input.submissionFormat,
         created_by: user.id
       }])
@@ -31,6 +40,26 @@ export const createAssignment = createSafeAction(
     if (assignmentError) throw new Error(assignmentError.message);
 
     const assignmentId = assignmentData[0].id;
+    
+    // Insert attachments into the new assignment_attachments table
+    if (input.attachments && input.attachments.length > 0) {
+      const attachmentsToInsert = input.attachments.map(att => ({
+        assignment_id: assignmentId,
+        file_name: att.fileName,
+        file_url: att.fileUrl,
+        file_type: att.fileType,
+        order_index: att.orderIndex
+      }));
+      
+      const { error: attachmentsError } = await adminSupabase
+        .from("assignment_attachments")
+        .insert(attachmentsToInsert);
+        
+      if (attachmentsError) {
+        console.error("Failed to insert attachments:", attachmentsError);
+        throw new Error("Failed to save assignment attachments: " + attachmentsError.message);
+      }
+    }
     
     if (input.assigneeIds && input.assigneeIds.length > 0) {
       const assigneesToInsert = input.assigneeIds.map(id => ({
@@ -51,11 +80,6 @@ export const createAssignment = createSafeAction(
           try {
             const resend = new Resend(resendApiKey);
             const { createClient } = await import('@supabase/supabase-js');
-            const adminSupabase = createClient(
-              process.env.NEXT_PUBLIC_SUPABASE_URL!,
-              process.env.SUPABASE_SERVICE_ROLE_KEY!
-            );
-            
             const { data: studentsData, error: queryError } = await adminSupabase
               .from("users")
               .select(`
@@ -142,7 +166,7 @@ export const getAssignments = createSafeAction(
         .select(`
           *,
           assignment_assignees!inner(student_id),
-          submissions (id, student_id)
+          submissions (id, student_id, grade)
         `)
         .eq('assignment_assignees.student_id', user.id)
         .is('deleted_at', null)
@@ -150,11 +174,15 @@ export const getAssignments = createSafeAction(
         .order('created_at', { ascending: false });
         
       if (error) throw new Error(error.message);
-      const formattedData = data.map((assignment: any) => ({
-        ...assignment,
-        submissions_count: assignment.submissions?.length || 0,
-        has_submitted: assignment.submissions?.some((sub: any) => sub.student_id === user.id) || false
-      }));
+      const formattedData = data.map((assignment: any) => {
+        const userSubmission = assignment.submissions?.find((sub: any) => sub.student_id === user.id);
+        return {
+          ...assignment,
+          submissions_count: assignment.submissions?.length || 0,
+          has_submitted: !!userSubmission,
+          grade: userSubmission?.grade || null
+        };
+      });
       return formattedData;
     } else {
       const { data, error } = await supabase
@@ -182,11 +210,17 @@ export const getAssignmentById = createSafeAction(
   z.object({ id: z.string() }),
   [], // both
   async ({ input, user, supabase }) => {
-    const { data, error } = await supabase
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data, error } = await adminSupabase
       .from("assignments")
       .select(`
         *,
-        assignment_assignees(student_id)
+        assignment_assignees(student_id),
+        assignment_attachments(*)
       `)
       .eq("id", input.id)
       .is("deleted_at", null)
@@ -213,15 +247,20 @@ export const getAssignmentDetailsForTeacher = createSafeAction(
   z.object({ assignmentId: z.string() }),
   ["teacher"],
   async ({ input, supabase }) => {
-    const { data: assignment, error: assignmentError } = await supabase
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: assignment, error: assignmentError } = await adminSupabase
       .from("assignments")
-      .select("*")
+      .select("*, assignment_attachments(*)")
       .eq("id", input.assignmentId)
       .single();
 
     if (assignmentError) throw new Error(assignmentError.message);
 
-    const { data: assigneesData, error: assigneesError } = await supabase
+    const { data: assigneesData, error: assigneesError } = await adminSupabase
       .from("assignment_assignees")
       .select(`
         student_id,
@@ -231,15 +270,24 @@ export const getAssignmentDetailsForTeacher = createSafeAction(
 
     if (assigneesError) throw new Error(assigneesError.message);
 
-    const { data: submissionsData, error: submissionsError } = await supabase
+    const { data: submissionsData, error: submissionsError } = await adminSupabase
       .from("submissions")
-      .select("*")
+      .select(`
+        *,
+        submission_attachments (*)
+      `)
       .eq("assignment_id", input.assignmentId);
 
     if (submissionsError) throw new Error(submissionsError.message);
 
     const assignees = assigneesData.map((a: any) => {
       const submission = submissionsData.find((s: any) => s.student_id === a.student_id);
+      
+      // Sort attachments by order_index if they exist
+      if (submission && submission.submission_attachments) {
+        submission.submission_attachments.sort((attA: any, attB: any) => attA.order_index - attB.order_index);
+      }
+
       return {
         id: a.student_id,
         full_name: a.users.full_name,

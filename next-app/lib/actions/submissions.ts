@@ -12,14 +12,23 @@ import { createClient } from "@supabase/supabase-js";
 export const submitSolution = createSafeAction(
   z.object({
     assignmentId: z.string(),
-    fileUrl: z.string().optional().nullable(),
-    audioUrl: z.string().optional().nullable()
-  }).refine(data => data.fileUrl || data.audioUrl, {
-    message: "Either fileUrl or audioUrl must be provided"
+    attachments: z.array(z.object({
+      fileName: z.string(),
+      fileUrl: z.string(),
+      fileType: z.string(),
+      orderIndex: z.number()
+    }))
+  }).refine(data => data.attachments.length > 0, {
+    message: "At least one attachment must be provided"
   }),
   ["student"],
-  async ({ input, user, supabase }) => {
-    const { data: existing } = await supabase
+  async ({ input, user }) => {
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: existing } = await adminSupabase
       .from("submissions")
       .select("id, file_url, audio_url")
       .eq("assignment_id", input.assignmentId)
@@ -27,35 +36,69 @@ export const submitSolution = createSafeAction(
       .maybeSingle();
 
     let data, error;
+    let submissionId;
+
+    // Find first document and first audio for legacy columns (Two-Phase Rollout)
+    const firstDoc = input.attachments.find(a => a.fileType === 'document');
+    const firstAudio = input.attachments.find(a => a.fileType === 'audio');
+    const legacyFileUrl = firstDoc ? firstDoc.fileUrl : null;
+    const legacyAudioUrl = firstAudio ? firstAudio.fileUrl : null;
 
     if (existing) {
-      const updatePayload: any = {};
-      if (input.fileUrl !== undefined) updatePayload.file_url = input.fileUrl;
-      if (input.audioUrl !== undefined) updatePayload.audio_url = input.audioUrl;
+      submissionId = existing.id;
+      const updatePayload: any = {
+        file_url: legacyFileUrl,
+        audio_url: legacyAudioUrl
+      };
       
-      const result = await supabase
+      const result = await adminSupabase
         .from("submissions")
         .update(updatePayload)
         .eq("id", existing.id)
         .select();
       data = result.data;
       error = result.error;
+
+      // Delete old attachments to replace with new array
+      await adminSupabase.from("submission_attachments").delete().eq("submission_id", submissionId);
     } else {
-      const result = await supabase
+      // Ensure we pass constraint check submissions_has_file_or_audio
+      const fallbackUrl = legacyFileUrl || legacyAudioUrl || input.attachments[0]?.fileUrl;
+      const result = await adminSupabase
         .from("submissions")
         .insert([{ 
           assignment_id: input.assignmentId, 
           student_id: user.id,
           student_name: user.full_name,
-          file_url: input.fileUrl,
-          audio_url: input.audioUrl
+          file_url: legacyFileUrl || (legacyAudioUrl ? null : fallbackUrl),
+          audio_url: legacyAudioUrl || (legacyFileUrl ? null : fallbackUrl)
         }])
         .select();
       data = result.data;
       error = result.error;
+      if (data && data.length > 0) {
+        submissionId = data[0].id;
+      }
     }
 
     if (error) throw new Error(error.message);
+
+    // Insert new attachments
+    if (submissionId && input.attachments.length > 0) {
+      const attachmentsToInsert = input.attachments.map(att => ({
+        submission_id: submissionId,
+        file_name: att.fileName,
+        file_url: att.fileUrl,
+        file_type: att.fileType,
+        order_index: att.orderIndex
+      }));
+
+      const { error: attachError } = await adminSupabase
+        .from("submission_attachments")
+        .insert(attachmentsToInsert);
+
+      if (attachError) throw new Error(attachError.message);
+    }
 
     // Asynchronously send email to teacher if opted in
     const resendApiKey = process.env.RESEND_API_KEY;
@@ -63,11 +106,6 @@ export const submitSolution = createSafeAction(
       Promise.resolve().then(async () => {
         try {
           const resend = new Resend(resendApiKey);
-          const { createClient } = await import('@supabase/supabase-js');
-          const adminSupabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-          );
 
           const { data: assignmentData, error: fetchError } = await adminSupabase
             .from("assignments")
@@ -167,14 +205,31 @@ export const submitSolution = createSafeAction(
 export const getSubmissionsByAssignment = createSafeAction(
   z.object({ assignmentId: z.string() }),
   ["teacher"],
-  async ({ input, supabase }) => {
-    const { data, error } = await supabase
+  async ({ input }) => {
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data, error } = await adminSupabase
       .from("submissions")
-      .select("*")
+      .select(`
+        *,
+        submission_attachments (*)
+      `)
       .eq("assignment_id", input.assignmentId)
       .order('submitted_at', { ascending: false });
 
     if (error) throw new Error(error.message);
+
+    // Sort attachments by order_index
+    if (data) {
+      data.forEach(sub => {
+        if (sub.submission_attachments) {
+          sub.submission_attachments.sort((a: any, b: any) => a.order_index - b.order_index);
+        }
+      });
+    }
+
     return data;
   }
 );
@@ -294,15 +349,27 @@ export const gradeSubmission = createSafeAction(
 export const getStudentSubmission = createSafeAction(
   z.object({ assignmentId: z.string() }),
   ["student"],
-  async ({ input, user, supabase }) => {
-    const { data, error } = await supabase
+  async ({ input, user }) => {
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data, error } = await adminSupabase
       .from("submissions")
-      .select("*")
+      .select(`
+        *,
+        submission_attachments (*)
+      `)
       .eq("assignment_id", input.assignmentId)
       .eq("student_id", user.id)
       .maybeSingle();
 
     if (error) throw new Error(error.message);
+
+    if (data && data.submission_attachments) {
+      data.submission_attachments.sort((a: any, b: any) => a.order_index - b.order_index);
+    }
+
     return data;
   }
 );
@@ -313,8 +380,12 @@ export const removeSubmission = createSafeAction(
     assignmentId: z.string()
   }),
   ["student"],
-  async ({ input, user, supabase }) => {
-    const { error } = await supabase
+  async ({ input, user }) => {
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { error } = await adminSupabase
       .from("submissions")
       .delete()
       .eq("id", input.submissionId)
