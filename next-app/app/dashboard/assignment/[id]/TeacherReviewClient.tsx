@@ -85,6 +85,7 @@ interface TeacherReviewClientProps {
 
 export default function TeacherReviewClient({ assignmentData, allStudents }: TeacherReviewClientProps) {
   const [selectedAssignee, setSelectedAssignee] = useState<Assignee | null>(null);
+  const [selectedPreviewDocUrl, setSelectedPreviewDocUrl] = useState<string | null>(null);
   
   // Edit Assignees State
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -102,6 +103,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
   // Update grading state when assignee changes
   const handleSelectAssignee = (assignee: Assignee) => {
     setSelectedAssignee(assignee);
+    setSelectedPreviewDocUrl(null);
     if (assignee.submission) {
       setGrade(assignee.submission.grade || "");
       setFeedback(assignee.submission.feedback || "");
@@ -424,76 +426,61 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
         </Card>
 
         {/* Right Panel: Submission Viewer & Grading */}
-        <div className="md:col-span-9 flex flex-col gap-6">
-          <Card className="flex flex-col overflow-hidden bg-slate-50/50 min-h-[500px]">
-            {selectedAssignee ? (
-              selectedAssignee.has_submitted && selectedAssignee.submission ? (
-                <>
-                  <CardHeader className="pb-3 border-b bg-white">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-xl">{selectedAssignee.full_name}'s Submission</CardTitle>
-                        <CardDescription>
-                          Submitted on {new Date(selectedAssignee.submission.submitted_at).toLocaleString()}
-                        </CardDescription>
-                      </div>
+        <div className="md:col-span-9 flex flex-col gap-6 items-start">
+          {!selectedAssignee ? (
+            <Card className="w-full flex flex-col items-center justify-center text-muted-foreground p-8 min-h-[500px] bg-slate-50/50">
+              <FileText className="h-16 w-16 mb-4 opacity-20" />
+              <h3 className="text-xl font-medium text-slate-700 mb-1">Select a Student</h3>
+              <p className="text-center max-w-sm">
+                Click on a student from the left panel to view their submission status and submitted files.
+              </p>
+            </Card>
+          ) : !selectedAssignee.has_submitted || !selectedAssignee.submission ? (
+            <Card className="w-full flex flex-col items-center justify-center text-muted-foreground p-8 min-h-[500px] bg-slate-50/50">
+              <Clock className="h-16 w-16 mb-4 opacity-20" />
+              <h3 className="text-xl font-medium text-slate-700 mb-1">Waiting for Submission</h3>
+              <p className="text-center max-w-sm">
+                {selectedAssignee.full_name} hasn't submitted their work for this assignment yet.
+              </p>
+            </Card>
+          ) : (
+            <>
+              {/* Submission Viewer */}
+              <Card className="w-full flex flex-col overflow-hidden bg-slate-50/50 flex-shrink-0">
+                <CardHeader className="pb-3 border-b bg-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xl">{selectedAssignee.full_name}'s Submission</CardTitle>
+                      <CardDescription>
+                        Submitted on {new Date(selectedAssignee.submission.submitted_at).toLocaleString()}
+                      </CardDescription>
                     </div>
-                  </CardHeader>
-                  <div className="flex-1 bg-slate-50/50 p-6 flex flex-col gap-6">
-                    {(() => {
-                      const attachments = selectedAssignee.submission.submission_attachments || [];
-                      const documents = attachments.filter(a => a.file_type === 'document');
-                      const audios = attachments.filter(a => a.file_type === 'audio');
-                      
-                      const hasLegacyFile = !attachments.length && selectedAssignee.submission.file_url;
-                      const hasLegacyAudio = !attachments.length && selectedAssignee.submission.audio_url;
+                  </div>
+                </CardHeader>
+                <div className="bg-slate-50/50 p-6 flex flex-col gap-6">
+                  {(() => {
+                    const attachments = selectedAssignee.submission!.submission_attachments || [];
+                    const documents = attachments.filter(a => a.file_type === 'document');
+                    const audios = attachments.filter(a => a.file_type === 'audio');
+                    
+                    const hasLegacyFile = !attachments.length && selectedAssignee.submission!.file_url;
+                    const hasLegacyAudio = !attachments.length && selectedAssignee.submission!.audio_url;
 
-                      if (!attachments.length && !hasLegacyFile && !hasLegacyAudio) {
-                        return <p className="text-muted-foreground text-center mt-10">No attachments found.</p>;
-                      }
+                    if (!attachments.length && !hasLegacyFile && !hasLegacyAudio) {
+                      return <p className="text-muted-foreground text-center mt-10">No attachments found.</p>;
+                    }
 
-                      return (
+                    const defaultPreviewUrl = documents.length > 0 ? documents[0].file_url : (hasLegacyFile ? selectedAssignee.submission!.file_url : null);
+                    const activePreviewUrl = selectedPreviewDocUrl || defaultPreviewUrl;
+
+                    return (
+                      <div className="flex flex-col gap-6">
                         <Card className="shadow-sm border border-slate-200 bg-white">
                           <CardHeader className="bg-slate-50/80 border-b pb-4 pt-5 px-6">
-                            <CardTitle className="text-lg font-semibold text-slate-800">Student Attachments</CardTitle>
+                            <CardTitle className="text-lg font-semibold text-slate-800">Attachments</CardTitle>
                           </CardHeader>
                           <CardContent className="p-0 flex flex-col divide-y divide-slate-100">
                             
-                            {/* Documents Section */}
-                            {(documents.length > 0 || hasLegacyFile) && (
-                              <div className="p-6">
-                                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Documents</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {documents.map((doc, i) => (
-                                    <div key={doc.id || i} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors group">
-                                      <div className="flex items-center gap-3 overflow-hidden">
-                                        <div className="bg-blue-100 p-2 rounded-md shrink-0">
-                                          <FileText className="h-5 w-5 text-blue-600" />
-                                        </div>
-                                        <span className="font-medium text-sm text-slate-700 truncate">{doc.file_name}</span>
-                                      </div>
-                                      <Button variant="ghost" size="sm" className="shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 sm:opacity-0 group-hover:opacity-100 transition-opacity" asChild>
-                                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer">View</a>
-                                      </Button>
-                                    </div>
-                                  ))}
-                                  {hasLegacyFile && (
-                                    <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors group">
-                                      <div className="flex items-center gap-3 overflow-hidden">
-                                        <div className="bg-blue-100 p-2 rounded-md shrink-0">
-                                          <FileText className="h-5 w-5 text-blue-600" />
-                                        </div>
-                                        <span className="font-medium text-sm text-slate-700 truncate">Uploaded Document</span>
-                                      </div>
-                                      <Button variant="ghost" size="sm" className="shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 sm:opacity-0 group-hover:opacity-100 transition-opacity" asChild>
-                                        <a href={selectedAssignee.submission.file_url!} target="_blank" rel="noopener noreferrer">View</a>
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
                             {/* Audio Playlist Section */}
                             {(audios.length > 0 || hasLegacyAudio) && (
                               <div className="p-6">
@@ -506,7 +493,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                                         <Mic className="h-5 w-5 text-indigo-500" />
                                         <span className="font-semibold text-slate-700">{audio.file_name}</span>
                                       </div>
-                                      <audio controls className="w-full max-w-2xl h-12" src={audio.file_url}>
+                                      <audio controls className="w-full h-12" src={audio.file_url}>
                                         Your browser does not support the audio element.
                                       </audio>
                                     </div>
@@ -518,7 +505,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                                         <Mic className="h-5 w-5 text-indigo-500" />
                                         <span className="font-semibold text-slate-700">Recorded Audio</span>
                                       </div>
-                                      <audio controls className="w-full max-w-2xl h-12" src={selectedAssignee.submission.audio_url!}>
+                                      <audio controls className="w-full h-12" src={selectedAssignee.submission!.audio_url!}>
                                         Your browser does not support the audio element.
                                       </audio>
                                     </div>
@@ -526,85 +513,109 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                                 </div>
                               </div>
                             )}
+
+                            {/* Documents Section */}
+                            {(documents.length > 0 || hasLegacyFile) && (
+                              <div className="p-6">
+                                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Documents</h4>
+                                <div className="flex flex-col gap-3">
+                                  {documents.map((doc, i) => (
+                                    <div key={doc.id || i} className={`flex items-center justify-between p-3 rounded-lg border transition-colors group ${selectedPreviewDocUrl === doc.file_url || (!selectedPreviewDocUrl && i === 0) ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="bg-blue-100 p-2 rounded-md shrink-0">
+                                          <FileText className="h-5 w-5 text-blue-600" />
+                                        </div>
+                                        <span className="font-medium text-sm text-slate-700 truncate">{doc.file_name}</span>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-100" onClick={() => setSelectedPreviewDocUrl(doc.file_url)}>
+                                        Preview
+                                      </Button>
+                                    </div>
+                                  ))}
+                                  {hasLegacyFile && (
+                                    <div className={`flex items-center justify-between p-3 rounded-lg border transition-colors group ${selectedPreviewDocUrl === selectedAssignee.submission!.file_url! || (!selectedPreviewDocUrl && documents.length === 0) ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="bg-blue-100 p-2 rounded-md shrink-0">
+                                          <FileText className="h-5 w-5 text-blue-600" />
+                                        </div>
+                                        <span className="font-medium text-sm text-slate-700 truncate">Uploaded Document</span>
+                                      </div>
+                                      <Button variant="ghost" size="sm" className="shrink-0 text-blue-600 hover:text-blue-700 hover:bg-blue-100" onClick={() => setSelectedPreviewDocUrl(selectedAssignee.submission!.file_url!)}>
+                                        Preview
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
-                      );
-                    })()}
-                  </div>
-                </>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
-                  <Clock className="h-16 w-16 mb-4 opacity-20" />
-                  <h3 className="text-xl font-medium text-slate-700 mb-1">Waiting for Submission</h3>
-                  <p className="text-center max-w-sm">
-                    {selectedAssignee.full_name} hasn't submitted their work for this assignment yet.
-                  </p>
-                </div>
-              )
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
-                <FileText className="h-16 w-16 mb-4 opacity-20" />
-                <h3 className="text-xl font-medium text-slate-700 mb-1">Select a Student</h3>
-                <p className="text-center max-w-sm">
-                  Click on a student from the left panel to view their submission status and submitted files.
-                </p>
-              </div>
-            )}
-          </Card>
 
-          {/* Grading Panel (Only shown if a submitted assignee is selected) */}
-          {selectedAssignee && selectedAssignee.has_submitted && selectedAssignee.submission && (
-            <Card className="flex-shrink-0">
-              <CardHeader className="py-4">
-                <CardTitle className="text-lg">Grading & Feedback</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-[200px_1fr]">
-                  <div className="space-y-2">
-                    <Label htmlFor="grade">Grade / Score (0-100)</Label>
-                    <div className="flex space-x-2 items-center">
-                      <Input 
-                        id="grade" 
-                        type="number"
-                        min="0"
-                        max="100"
-                        placeholder="e.g. 95" 
-                        value={grade}
-                        onChange={(e) => setGrade(e.target.value)}
-                        disabled={isPending}
-                        className="w-24"
-                      />
-                      <span className="text-muted-foreground">/ 100</span>
-                    </div>
-                    {getRatingInfo(grade) && (
-                      <div className="mt-2">
-                        <Badge className={getRatingInfo(grade)?.color}>
-                          {getRatingInfo(grade)?.label}
-                        </Badge>
+                        {/* Document Viewer */}
+                        {activePreviewUrl && (
+                          <Card className="flex flex-col overflow-hidden bg-white shadow-sm h-[550px]">
+                            <iframe src={`${activePreviewUrl}#toolbar=1&navpanes=0`} className="w-full h-full border-0" />
+                          </Card>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Feedback (Rich Text)</Label>
-                    <RichTextEditor 
-                      value={feedback} 
-                      onChange={setFeedback}
-                      disabled={isPending}
-                    />
-                  </div>
+                    );
+                  })()}
                 </div>
-                <div className="mt-4 flex justify-end space-x-2">
-                  {(selectedAssignee?.submission?.grade || selectedAssignee?.submission?.feedback) && (
-                    <Button variant="destructive" onClick={handleRemoveGrade} disabled={isPending}>
-                      <Trash2 className="mr-2 h-4 w-4" /> {isPending ? "Removing..." : "Remove Grade"}
-                    </Button>
-                  )}
-                  <Button onClick={handleSaveGrade} disabled={isPending}>
-                    <Save className="mr-2 h-4 w-4" /> {isPending ? "Saving..." : "Save Grade"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              </Card>
+
+              {/* Grading Panel */}
+              <Card className="w-full flex-shrink-0">
+                  <CardHeader className="py-4">
+                    <CardTitle className="text-lg">Grading & Feedback</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="grade">Grade / Score (0-100)</Label>
+                        <div className="flex space-x-2 items-center">
+                          <Input 
+                            id="grade" 
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="e.g. 95" 
+                            value={grade}
+                            onChange={(e) => setGrade(e.target.value)}
+                            disabled={isPending}
+                            className="w-24"
+                          />
+                          <span className="text-muted-foreground">/ 100</span>
+                        </div>
+                        {getRatingInfo(grade) && (
+                          <div className="mt-2">
+                            <Badge className={getRatingInfo(grade)?.color}>
+                              {getRatingInfo(grade)?.label}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Feedback (Rich Text)</Label>
+                        <RichTextEditor 
+                          value={feedback} 
+                          onChange={setFeedback}
+                          disabled={isPending}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      {(selectedAssignee.submission.grade || selectedAssignee.submission.feedback) && (
+                        <Button variant="destructive" onClick={handleRemoveGrade} disabled={isPending}>
+                          <Trash2 className="mr-2 h-4 w-4" /> {isPending ? "Removing..." : "Remove"}
+                        </Button>
+                      )}
+                      <Button onClick={handleSaveGrade} disabled={isPending}>
+                        <Save className="mr-2 h-4 w-4" /> {isPending ? "Saving..." : "Save Grade"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+            </>
           )}
         </div>
       </div>
