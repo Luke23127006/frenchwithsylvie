@@ -367,6 +367,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     <TableHead>Title</TableHead>
                     <TableHead>Created Date</TableHead>
                     <TableHead className="text-center">Submissions</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -374,26 +375,55 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   {activeTab === "active" && assignments.map((assignment) => (
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
-                        <div className="flex items-center">
-                          {assignment.submission_format === 'AUDIO' ? (
-                            <Mic className="mr-2 h-4 w-4 text-muted-foreground" />
-                          ) : assignment.submission_format === 'BOTH' ? (
-                            <FileAudio className="mr-2 h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                          )}
-                          <span className={assignment.is_hidden ? "text-muted-foreground" : ""}>
-                            {assignment.title}
-                          </span>
+                        <div className="flex items-center flex-wrap gap-2">
+                          <div className="flex items-center">
+                            {assignment.submission_format === 'AUDIO' ? (
+                              <Mic className="mr-2 h-4 w-4 text-muted-foreground" />
+                            ) : assignment.submission_format === 'BOTH' ? (
+                              <FileAudio className="mr-2 h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span className={assignment.is_hidden ? "text-muted-foreground" : ""}>
+                              {assignment.title}
+                            </span>
+                          </div>
                           {assignment.is_hidden && (
-                            <span className="ml-2 text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full font-semibold">
                               Hidden
                             </span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>{new Date(assignment.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-center">{assignment.submissions_count || 0}</TableCell>
+                      <TableCell className="text-center">{assignment.submissions_count || 0} / {assignment.assignees_count || 0}</TableCell>
+                      <TableCell className="text-center">
+                        {(() => {
+                          const ungraded = assignment.ungraded_submissions_count || 0;
+                          const submissions = assignment.submissions_count || 0;
+                          const assignees = assignment.assignees_count || 0;
+                          
+                          let label = "No Assignees";
+                          let color = "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
+                          
+                          if (ungraded > 0) {
+                            label = "Needs Grading";
+                            color = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+                          } else if (assignees > 0 && submissions === assignees && ungraded === 0) {
+                            label = "Completed";
+                            color = "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300";
+                          } else if (submissions < assignees) {
+                            label = "Waiting";
+                            color = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+                          }
+                          
+                          return (
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${color}`}>
+                              {label}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button 
                           variant="ghost" 
@@ -446,6 +476,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                         Deleted: {new Date(assignment.deleted_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-center text-muted-foreground">{assignment.submissions_count || 0}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">-</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button 
                           variant="outline" 
@@ -469,14 +500,14 @@ export default function DashboardClient({ assignments, students, trashedAssignme
 
                   {activeTab === "active" && assignments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center">
+                      <TableCell colSpan={6} className="h-24 text-center">
                         No active assignments found.
                       </TableCell>
                     </TableRow>
                   )}
                   {activeTab === "trash" && trashedAssignments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                         Trash is empty.
                       </TableCell>
                     </TableRow>
