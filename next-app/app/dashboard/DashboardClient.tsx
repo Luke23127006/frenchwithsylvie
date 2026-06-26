@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { Copy, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Plus, Mic, FileAudio } from "lucide-react";
+import { Copy, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Plus, Mic, FileAudio, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
 import { getSignedUploadUrls } from "@/lib/actions/storage";
@@ -33,6 +33,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
@@ -61,7 +69,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [isRecording, setIsRecording] = useState(false);
   
   const [assignmentSearch, setAssignmentSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "needs_grading" | "waiting" | "completed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "needs_grading" | "waiting" | "completed" | "scheduled">("all");
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "title_asc" | "title_desc">("date_desc");
   const [isScheduled, setIsScheduled] = useState(false);
   const [publishAt, setPublishAt] = useState(() => {
@@ -254,6 +262,8 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   };
 
   const getAssignmentState = (assignment: any) => {
+    if (assignment.publish_at) return "scheduled";
+    
     const ungraded = assignment.ungraded_submissions_count || 0;
     const submissions = assignment.submissions_count || 0;
     const assignees = assignment.assignees_count || 0;
@@ -463,6 +473,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" sideOffset={4}>
                     <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="needs_grading">Needs Grading</SelectItem>
                     <SelectItem value="waiting">Waiting</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
@@ -526,7 +537,11 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                           let label = "No Assignees";
                           let color = "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
                           
-                          if (stateVal === "needs_grading") {
+                          if (stateVal === "scheduled") {
+                            const timeStr = new Date(assignment.publish_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                            label = `Scheduled: ${timeStr}`;
+                            color = "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300";
+                          } else if (stateVal === "needs_grading") {
                             label = "Needs Grading";
                             color = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
                           } else if (stateVal === "completed") {
@@ -544,36 +559,43 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          title={assignment.is_hidden ? "Unhide" : "Hide from students"}
-                          onClick={() => handleHide(assignment.id, !assignment.is_hidden)}
-                          disabled={isPending}
-                        >
-                          {assignment.is_hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="text-destructive"
-                          title="Move to Trash"
-                          onClick={() => handleTrash(assignment.id)}
-                          disabled={isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleCopyLink(assignment.id)}
-                        >
-                          <Copy className="mr-2 h-4 w-4" /> Copy Link
-                        </Button>
+                      <TableCell className="text-right flex justify-end gap-2 items-center">
                         <Button variant="secondary" size="sm" asChild>
                           <Link href={`/dashboard/assignment/${assignment.id}`}>View</Link>
                         </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleCopyLink(assignment.id)} className="cursor-pointer">
+                              <Copy className="mr-2 h-4 w-4" /> Copy Link
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleHide(assignment.id, !assignment.is_hidden)}
+                              disabled={isPending}
+                              className="cursor-pointer"
+                            >
+                              {assignment.is_hidden ? (
+                                <><Eye className="mr-2 h-4 w-4" /> Unhide</>
+                              ) : (
+                                <><EyeOff className="mr-2 h-4 w-4" /> Hide from students</>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleTrash(assignment.id)}
+                              disabled={isPending}
+                              className="text-destructive focus:text-destructive cursor-pointer"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Move to Trash
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
