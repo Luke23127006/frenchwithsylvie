@@ -13,6 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,6 +58,10 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [isRecording, setIsRecording] = useState(false);
+  
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "needs_grading" | "waiting" | "completed">("all");
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "title_asc" | "title_desc">("date_desc");
 
   useEffect(() => {
     if (!isUploading) return;
@@ -231,6 +242,46 @@ export default function DashboardClient({ assignments, students, trashedAssignme
     });
   };
 
+  const getAssignmentState = (assignment: any) => {
+    const ungraded = assignment.ungraded_submissions_count || 0;
+    const submissions = assignment.submissions_count || 0;
+    const assignees = assignment.assignees_count || 0;
+    
+    if (ungraded > 0) return "needs_grading";
+    if (assignees > 0 && submissions === assignees && ungraded === 0) return "completed";
+    if (submissions < assignees) return "waiting";
+    return "no_assignees";
+  };
+
+  const processedAssignments = assignments
+    .filter(a => {
+      if (assignmentSearch && !a.title.toLowerCase().includes(assignmentSearch.toLowerCase())) return false;
+      if (statusFilter !== "all") {
+        if (getAssignmentState(a) !== statusFilter) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "date_desc") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === "date_asc") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortBy === "title_asc") return a.title.localeCompare(b.title);
+      if (sortBy === "title_desc") return b.title.localeCompare(a.title);
+      return 0;
+    });
+
+  const processedTrashedAssignments = trashedAssignments
+    .filter(a => {
+      if (assignmentSearch && !a.title.toLowerCase().includes(assignmentSearch.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "date_desc") return new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime();
+      if (sortBy === "date_asc") return new Date(a.deleted_at).getTime() - new Date(b.deleted_at).getTime();
+      if (sortBy === "title_asc") return a.title.localeCompare(b.title);
+      if (sortBy === "title_desc") return b.title.localeCompare(a.title);
+      return 0;
+    });
+
   return (
     <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
       <div className="mb-6">
@@ -360,6 +411,43 @@ export default function DashboardClient({ assignments, students, trashedAssignme
             </div>
           </CardHeader>
           <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4 mt-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search assignments..."
+                  className="pl-8"
+                  value={assignmentSearch}
+                  onChange={(e) => setAssignmentSearch(e.target.value)}
+                />
+              </div>
+              {activeTab === "active" && (
+                <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" sideOffset={4}>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="needs_grading">Needs Grading</SelectItem>
+                    <SelectItem value="waiting">Waiting</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4}>
+                  <SelectItem value="date_desc">Newest First</SelectItem>
+                  <SelectItem value="date_asc">Oldest First</SelectItem>
+                  <SelectItem value="title_asc">Title (A-Z)</SelectItem>
+                  <SelectItem value="title_desc">Title (Z-A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
             <div className="rounded-md border mt-4">
               <Table>
                 <TableHeader>
@@ -372,7 +460,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeTab === "active" && assignments.map((assignment) => (
+                  {activeTab === "active" && processedAssignments.map((assignment) => (
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center flex-wrap gap-2">
@@ -399,20 +487,18 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                       <TableCell className="text-center">{assignment.submissions_count || 0} / {assignment.assignees_count || 0}</TableCell>
                       <TableCell className="text-center">
                         {(() => {
-                          const ungraded = assignment.ungraded_submissions_count || 0;
-                          const submissions = assignment.submissions_count || 0;
-                          const assignees = assignment.assignees_count || 0;
+                          const stateVal = getAssignmentState(assignment);
                           
                           let label = "No Assignees";
                           let color = "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
                           
-                          if (ungraded > 0) {
+                          if (stateVal === "needs_grading") {
                             label = "Needs Grading";
                             color = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
-                          } else if (assignees > 0 && submissions === assignees && ungraded === 0) {
+                          } else if (stateVal === "completed") {
                             label = "Completed";
                             color = "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300";
-                          } else if (submissions < assignees) {
+                          } else if (stateVal === "waiting") {
                             label = "Waiting";
                             color = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
                           }
@@ -458,7 +544,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     </TableRow>
                   ))}
                   
-                  {activeTab === "trash" && trashedAssignments.map((assignment) => (
+                  {activeTab === "trash" && processedTrashedAssignments.map((assignment) => (
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center text-muted-foreground">
@@ -498,14 +584,14 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     </TableRow>
                   ))}
 
-                  {activeTab === "active" && assignments.length === 0 && (
+                  {activeTab === "active" && processedAssignments.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center">
                         No active assignments found.
                       </TableCell>
                     </TableRow>
                   )}
-                  {activeTab === "trash" && trashedAssignments.length === 0 && (
+                  {activeTab === "trash" && processedTrashedAssignments.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                         Trash is empty.
