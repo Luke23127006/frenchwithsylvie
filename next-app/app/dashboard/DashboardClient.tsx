@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -62,6 +63,15 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [assignmentSearch, setAssignmentSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "needs_grading" | "waiting" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "title_asc" | "title_desc">("date_desc");
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [publishAt, setPublishAt] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0);
+    // Format to YYYY-MM-DDTHH:mm for datetime-local input
+    const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+    return new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
+  });
 
   useEffect(() => {
     if (!isUploading) return;
@@ -175,7 +185,8 @@ export default function DashboardClient({ assignments, students, trashedAssignme
           title, 
           attachments: uploadedAttachments, 
           submissionFormat: "BOTH", 
-          assigneeIds: selectedStudents 
+          assigneeIds: selectedStudents,
+          publishAt: isScheduled ? new Date(publishAt).toISOString() : undefined
         });
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
@@ -309,6 +320,29 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   required 
                 />
               </div>
+              
+              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                <div className="space-y-0.5">
+                  <Label>Schedule Assignment</Label>
+                  <p className="text-xs text-muted-foreground">Publish this assignment at a later time</p>
+                </div>
+                <Switch checked={isScheduled} onCheckedChange={setIsScheduled} disabled={isPending || isUploading} />
+              </div>
+              
+              {isScheduled && (
+                <div className="grid gap-2">
+                  <Label htmlFor="publishAt">Publish Date & Time</Label>
+                  <Input 
+                    id="publishAt" 
+                    type="datetime-local" 
+                    value={publishAt}
+                    onChange={(e) => setPublishAt(e.target.value)}
+                    disabled={isPending || isUploading}
+                    required={isScheduled}
+                  />
+                </div>
+              )}
+
               <MultiAttachmentUploader
                 attachments={stagedAttachments}
                 setAttachments={setStagedAttachments}
