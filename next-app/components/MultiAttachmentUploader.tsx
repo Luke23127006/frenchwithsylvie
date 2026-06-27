@@ -36,7 +36,7 @@ function SortableAttachmentItem({ item, onRemove, onRename, uploadProgress }: { 
     <div ref={setNodeRef} style={style} className="flex flex-col gap-3 p-4 border rounded-xl bg-white mb-3 shadow-sm hover:bg-slate-50 transition-colors group relative overflow-hidden">
       {uploadProgress !== undefined && (
         <div 
-          className="absolute left-0 top-0 bottom-0 bg-blue-50/50 -z-0 transition-all duration-300"
+          className="absolute left-0 top-0 bottom-0 bg-blue-100 z-0 transition-all duration-300"
           style={{ width: `${uploadProgress}%` }}
         />
       )}
@@ -57,13 +57,19 @@ function SortableAttachmentItem({ item, onRemove, onRename, uploadProgress }: { 
         </div>
         
         {/* File Name Input */}
-        <div className="flex-grow min-w-0">
+        <div className="flex-grow min-w-0 flex items-center justify-between pr-2">
           <Input 
             value={item.name}
             onChange={(e) => onRename(item.id, e.target.value)}
-            className="h-9 text-sm border-transparent hover:border-slate-200 focus:border-blue-300 px-2 bg-transparent w-full"
+            className="h-9 text-sm border-transparent hover:border-slate-200 focus:border-blue-300 px-2 bg-transparent w-full disabled:opacity-100 disabled:cursor-not-allowed"
             placeholder="Attachment name"
+            disabled={uploadProgress !== undefined}
           />
+          {uploadProgress !== undefined && (
+            <span className="text-xs font-semibold text-blue-700 ml-2 whitespace-nowrap">
+              {uploadProgress}%
+            </span>
+          )}
         </div>
         
         {/* Delete Button */}
@@ -400,7 +406,7 @@ export function MultiAttachmentUploader({ attachments, setAttachments, uploadPro
                     item={att} 
                     onRemove={removeAttachment} 
                     onRename={renameAttachment}
-                    uploadProgress={uploadProgress[att.name]}
+                    uploadProgress={uploadProgress[att.id] ?? uploadProgress[att.name]}
                   />
                 ))}
               </div>
