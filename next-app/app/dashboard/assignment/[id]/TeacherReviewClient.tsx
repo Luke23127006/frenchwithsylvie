@@ -409,13 +409,17 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                         @{assignee.username}
                       </p>
                     </div>
-                    {assignee.has_submitted ? (
-                      <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                        <CheckCircle2 className="h-3 w-3 mr-1" /> Submitted
-                      </Badge>
-                    ) : (
+                    {!assignee.has_submitted ? (
                       <Badge variant="outline" className="text-slate-500 border-slate-200">
                         <Clock className="h-3 w-3 mr-1" /> Pending
+                      </Badge>
+                    ) : assignee.submission?.grade ? (
+                      <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                        <CheckCircle2 className="h-3 w-3 mr-1" /> {assignee.submission.grade}/100
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="bg-amber-500 hover:bg-amber-600 text-white">
+                        <Clock className="h-3 w-3 mr-1" /> Needs Grading
                       </Badge>
                     )}
                   </button>

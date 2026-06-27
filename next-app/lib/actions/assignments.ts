@@ -19,6 +19,7 @@ export const createAssignment = createSafeAction(
     })),
     submissionFormat: z.enum(["DOCUMENT", "AUDIO", "BOTH"]),
     assigneeIds: z.array(z.string()),
+    publishAt: z.string().optional(),
   }),
   ["teacher"],
   async ({ input, supabase, user }) => {
@@ -33,7 +34,9 @@ export const createAssignment = createSafeAction(
       .insert([{ 
         title: input.title, 
         submission_format: input.submissionFormat,
-        created_by: user.id
+        created_by: user.id,
+        is_hidden: !!input.publishAt,
+        publish_at: input.publishAt || null
       }])
       .select();
 
@@ -73,81 +76,100 @@ export const createAssignment = createSafeAction(
         
       if (assigneesError) throw new Error(assigneesError.message);
 
-      // Asynchronously send emails to students who opted in
-      const resendApiKey = process.env.RESEND_API_KEY;
-      if (resendApiKey) {
-        Promise.resolve().then(async () => {
-          try {
-            const resend = new Resend(resendApiKey);
-            const { createClient } = await import('@supabase/supabase-js');
-            const { data: studentsData, error: queryError } = await adminSupabase
-              .from("users")
-              .select(`
-                id,
-                full_name,
-                user_notification_settings(email, notify_new_assignment)
-              `)
-              .in("id", input.assigneeIds);
-
-            if (studentsData && studentsData.length > 0) {
-              const teacherName = user.full_name || 'Your Teacher';
-              const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL || 'http://localhost:3000';
-              const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
-              const assignmentLink = `${baseUrl}/assignment/${assignmentId}`;
-
-              for (const student of studentsData) {
-                // 1. Insert In-App Notification
-                const notificationPayload = {
-                  user_id: student.id,
-                  type: 'new_assignment',
-                  title: 'New Assignment',
-                  message: `You have a new assignment: ${input.title}`,
-                  action_url: `/assignment/${assignmentId}`
-                };
-
-                const { data: insertedNotification, error: insertError } = await adminSupabase
-                  .from('in_app_notifications')
-                  .insert(notificationPayload)
-                  .select()
-                  .single();
-
-                if (!insertError && insertedNotification) {
-                  // 2. Emit Broadcast Event
-                  await adminSupabase.channel(`user_notifications_${student.id}`).send({
-                    type: 'broadcast',
-                    event: 'new_notification',
-                    payload: insertedNotification
-                  });
-                } else {
-                  console.error("Failed to insert in-app notification:", insertError);
-                }
-
-                // 3. Send Email Notification (if opted in)
-                const settings = Array.isArray(student.user_notification_settings) 
-                  ? student.user_notification_settings[0] 
-                  : student.user_notification_settings;
-                
-                if (settings?.email && settings?.notify_new_assignment) {
-                  const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-
-                  await resend.emails.send({
-                    from: fromEmail,
-                    to: settings.email,
-                    subject: `New Assignment: ${input.title}`,
-                    react: React.createElement(NewAssignmentEmail, {
-                      studentName: student.full_name,
-                      assignmentTitle: input.title,
-                      teacherName: teacherName,
-                      assignmentLink: assignmentLink,
-                    }),
-                  });
+      if (input.publishAt) {
+        // Schedule via QStash
+        try {
+          const { Client } = await import("@upstash/qstash");
+          const qstashClient = new Client({ token: process.env.QSTASH_TOKEN! });
+          
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://frenchwithsylvie.online';
+          const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
+          
+          await qstashClient.publishJSON({
+            url: `${baseUrl}/api/assignments/publish`,
+            body: { assignmentId },
+            notBefore: Math.floor(new Date(input.publishAt).getTime() / 1000)
+          });
+        } catch (error) {
+          console.error("Failed to schedule assignment publish with QStash:", error);
+        }
+      } else {
+        // Asynchronously send emails to students who opted in
+        const resendApiKey = process.env.RESEND_API_KEY;
+        if (resendApiKey) {
+          Promise.resolve().then(async () => {
+            try {
+              const resend = new Resend(resendApiKey);
+              const { createClient } = await import('@supabase/supabase-js');
+              const { data: studentsData, error: queryError } = await adminSupabase
+                .from("users")
+                .select(`
+                  id,
+                  full_name,
+                  user_notification_settings(email, notify_new_assignment)
+                `)
+                .in("id", input.assigneeIds);
+  
+              if (studentsData && studentsData.length > 0) {
+                const teacherName = user.full_name || 'Your Teacher';
+                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://frenchwithsylvie.online';
+                const baseUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`;
+                const assignmentLink = `${baseUrl}/assignment/${assignmentId}`;
+  
+                for (const student of studentsData) {
+                  // 1. Insert In-App Notification
+                  const notificationPayload = {
+                    user_id: student.id,
+                    type: 'new_assignment',
+                    title: 'New Assignment',
+                    message: `You have a new assignment: ${input.title}`,
+                    action_url: `/assignment/${assignmentId}`
+                  };
+  
+                  const { data: insertedNotification, error: insertError } = await adminSupabase
+                    .from('in_app_notifications')
+                    .insert(notificationPayload)
+                    .select()
+                    .single();
+  
+                  if (!insertError && insertedNotification) {
+                    // 2. Emit Broadcast Event
+                    await adminSupabase.channel(`user_notifications_${student.id}`).send({
+                      type: 'broadcast',
+                      event: 'new_notification',
+                      payload: insertedNotification
+                    });
+                  } else {
+                    console.error("Failed to insert in-app notification:", insertError);
+                  }
+  
+                  // 3. Send Email Notification (if opted in)
+                  const settings = Array.isArray(student.user_notification_settings) 
+                    ? student.user_notification_settings[0] 
+                    : student.user_notification_settings;
+                  
+                  if (settings?.email && settings?.notify_new_assignment) {
+                    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+  
+                    await resend.emails.send({
+                      from: fromEmail,
+                      to: settings.email,
+                      subject: `New Assignment: ${input.title}`,
+                      react: React.createElement(NewAssignmentEmail, {
+                        studentName: student.full_name,
+                        assignmentTitle: input.title,
+                        teacherName: teacherName,
+                        assignmentLink: assignmentLink,
+                      }),
+                    });
+                  }
                 }
               }
+            } catch (error) {
+              console.error("Failed to send assignment notifications:", error);
             }
-          } catch (error) {
-            console.error("Failed to send assignment notifications:", error);
-          }
-        });
+          });
+        }
       }
     }
 
@@ -189,7 +211,7 @@ export const getAssignments = createSafeAction(
         .from("assignments")
         .select(`
           *,
-          submissions (count),
+          submissions (id, grade),
           assignment_assignees (count)
         `)
         .is('deleted_at', null)
@@ -198,7 +220,8 @@ export const getAssignments = createSafeAction(
       if (error) throw new Error(error.message);
       const formattedData = data.map((assignment: any) => ({
         ...assignment,
-        submissions_count: assignment.submissions?.[0]?.count || 0,
+        submissions_count: assignment.submissions?.length || 0,
+        ungraded_submissions_count: assignment.submissions?.filter((sub: any) => sub.grade === null).length || 0,
         assignees_count: assignment.assignment_assignees?.[0]?.count || 0
       }));
       return formattedData;

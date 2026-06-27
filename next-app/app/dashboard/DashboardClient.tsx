@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
-import { Copy, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Plus, Mic, FileAudio } from "lucide-react";
+import { Copy, FileText, Search, Eye, EyeOff, Trash2, RefreshCw, Plus, Mic, FileAudio, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createAssignment, toggleHideAssignment, moveToTrash, restoreAssignment, permanentlyDeleteAssignment } from "@/lib/actions/assignments";
 import { getSignedUploadUrls } from "@/lib/actions/storage";
@@ -13,9 +13,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -25,6 +33,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
@@ -51,6 +67,19 @@ export default function DashboardClient({ assignments, students, trashedAssignme
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [isRecording, setIsRecording] = useState(false);
+  
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "needs_grading" | "waiting" | "completed" | "scheduled">("all");
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "title_asc" | "title_desc">("date_desc");
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [publishAt, setPublishAt] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0);
+    // Format to YYYY-MM-DDTHH:mm for datetime-local input
+    const tzOffset = tomorrow.getTimezoneOffset() * 60000;
+    return new Date(tomorrow.getTime() - tzOffset).toISOString().slice(0, 16);
+  });
 
   useEffect(() => {
     if (!isUploading) return;
@@ -164,7 +193,8 @@ export default function DashboardClient({ assignments, students, trashedAssignme
           title, 
           attachments: uploadedAttachments, 
           submissionFormat: "BOTH", 
-          assigneeIds: selectedStudents 
+          assigneeIds: selectedStudents,
+          publishAt: isScheduled ? new Date(publishAt).toISOString() : undefined
         });
         if (createResult.error) {
           toast.error(`Creation failed: ${createResult.error}`);
@@ -231,6 +261,48 @@ export default function DashboardClient({ assignments, students, trashedAssignme
     });
   };
 
+  const getAssignmentState = (assignment: any) => {
+    if (assignment.publish_at) return "scheduled";
+    
+    const ungraded = assignment.ungraded_submissions_count || 0;
+    const submissions = assignment.submissions_count || 0;
+    const assignees = assignment.assignees_count || 0;
+    
+    if (ungraded > 0) return "needs_grading";
+    if (assignees > 0 && submissions === assignees && ungraded === 0) return "completed";
+    if (submissions < assignees) return "waiting";
+    return "no_assignees";
+  };
+
+  const processedAssignments = assignments
+    .filter(a => {
+      if (assignmentSearch && !a.title.toLowerCase().includes(assignmentSearch.toLowerCase())) return false;
+      if (statusFilter !== "all") {
+        if (getAssignmentState(a) !== statusFilter) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "date_desc") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === "date_asc") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortBy === "title_asc") return a.title.localeCompare(b.title);
+      if (sortBy === "title_desc") return b.title.localeCompare(a.title);
+      return 0;
+    });
+
+  const processedTrashedAssignments = trashedAssignments
+    .filter(a => {
+      if (assignmentSearch && !a.title.toLowerCase().includes(assignmentSearch.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "date_desc") return new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime();
+      if (sortBy === "date_asc") return new Date(a.deleted_at).getTime() - new Date(b.deleted_at).getTime();
+      if (sortBy === "title_asc") return a.title.localeCompare(b.title);
+      if (sortBy === "title_desc") return b.title.localeCompare(a.title);
+      return 0;
+    });
+
   return (
     <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
       <div className="mb-6">
@@ -258,6 +330,29 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                   required 
                 />
               </div>
+              
+              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                <div className="space-y-0.5">
+                  <Label>Schedule Assignment</Label>
+                  <p className="text-xs text-muted-foreground">Publish this assignment at a later time</p>
+                </div>
+                <Switch checked={isScheduled} onCheckedChange={setIsScheduled} disabled={isPending || isUploading} />
+              </div>
+              
+              {isScheduled && (
+                <div className="grid gap-2">
+                  <Label htmlFor="publishAt">Publish Date & Time</Label>
+                  <Input 
+                    id="publishAt" 
+                    type="datetime-local" 
+                    value={publishAt}
+                    onChange={(e) => setPublishAt(e.target.value)}
+                    disabled={isPending || isUploading}
+                    required={isScheduled}
+                  />
+                </div>
+              )}
+
               <MultiAttachmentUploader
                 attachments={stagedAttachments}
                 setAttachments={setStagedAttachments}
@@ -360,6 +455,44 @@ export default function DashboardClient({ assignments, students, trashedAssignme
             </div>
           </CardHeader>
           <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4 mt-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search assignments..."
+                  className="pl-8"
+                  value={assignmentSearch}
+                  onChange={(e) => setAssignmentSearch(e.target.value)}
+                />
+              </div>
+              {activeTab === "active" && (
+                <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" sideOffset={4}>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="needs_grading">Needs Grading</SelectItem>
+                    <SelectItem value="waiting">Waiting</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4}>
+                  <SelectItem value="date_desc">Newest First</SelectItem>
+                  <SelectItem value="date_asc">Oldest First</SelectItem>
+                  <SelectItem value="title_asc">Title (A-Z)</SelectItem>
+                  <SelectItem value="title_desc">Title (Z-A)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
             <div className="rounded-md border mt-4">
               <Table>
                 <TableHeader>
@@ -367,68 +500,107 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     <TableHead>Title</TableHead>
                     <TableHead>Created Date</TableHead>
                     <TableHead className="text-center">Submissions</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeTab === "active" && assignments.map((assignment) => (
+                  {activeTab === "active" && processedAssignments.map((assignment) => (
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
-                        <div className="flex items-center">
-                          {assignment.submission_format === 'AUDIO' ? (
-                            <Mic className="mr-2 h-4 w-4 text-muted-foreground" />
-                          ) : assignment.submission_format === 'BOTH' ? (
-                            <FileAudio className="mr-2 h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                          )}
-                          <span className={assignment.is_hidden ? "text-muted-foreground" : ""}>
-                            {assignment.title}
-                          </span>
+                        <div className="flex items-center flex-wrap gap-2">
+                          <div className="flex items-center">
+                            {assignment.submission_format === 'AUDIO' ? (
+                              <Mic className="mr-2 h-4 w-4 text-muted-foreground" />
+                            ) : assignment.submission_format === 'BOTH' ? (
+                              <FileAudio className="mr-2 h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span className={assignment.is_hidden ? "text-muted-foreground" : ""}>
+                              {assignment.title}
+                            </span>
+                          </div>
                           {assignment.is_hidden && (
-                            <span className="ml-2 text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full font-semibold">
                               Hidden
                             </span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>{new Date(assignment.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-center">{assignment.submissions_count || 0}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          title={assignment.is_hidden ? "Unhide" : "Hide from students"}
-                          onClick={() => handleHide(assignment.id, !assignment.is_hidden)}
-                          disabled={isPending}
-                        >
-                          {assignment.is_hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="text-destructive"
-                          title="Move to Trash"
-                          onClick={() => handleTrash(assignment.id)}
-                          disabled={isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleCopyLink(assignment.id)}
-                        >
-                          <Copy className="mr-2 h-4 w-4" /> Copy Link
-                        </Button>
+                      <TableCell className="text-center">{assignment.submissions_count || 0} / {assignment.assignees_count || 0}</TableCell>
+                      <TableCell className="text-center">
+                        {(() => {
+                          const stateVal = getAssignmentState(assignment);
+                          
+                          let label = "No Assignees";
+                          let color = "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300";
+                          
+                          if (stateVal === "scheduled") {
+                            const timeStr = new Date(assignment.publish_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+                            label = `Scheduled: ${timeStr}`;
+                            color = "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300";
+                          } else if (stateVal === "needs_grading") {
+                            label = "Needs Grading";
+                            color = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+                          } else if (stateVal === "completed") {
+                            label = "Completed";
+                            color = "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300";
+                          } else if (stateVal === "waiting") {
+                            label = "Waiting";
+                            color = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+                          }
+                          
+                          return (
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${color}`}>
+                              {label}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right flex justify-end gap-2 items-center">
                         <Button variant="secondary" size="sm" asChild>
                           <Link href={`/dashboard/assignment/${assignment.id}`}>View</Link>
                         </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleCopyLink(assignment.id)} className="cursor-pointer">
+                              <Copy className="mr-2 h-4 w-4" /> Copy Link
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => handleHide(assignment.id, !assignment.is_hidden)}
+                              disabled={isPending}
+                              className="cursor-pointer"
+                            >
+                              {assignment.is_hidden ? (
+                                <><Eye className="mr-2 h-4 w-4" /> Unhide</>
+                              ) : (
+                                <><EyeOff className="mr-2 h-4 w-4" /> Hide from students</>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleTrash(assignment.id)}
+                              disabled={isPending}
+                              className="text-destructive focus:text-destructive cursor-pointer"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Move to Trash
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
                   
-                  {activeTab === "trash" && trashedAssignments.map((assignment) => (
+                  {activeTab === "trash" && processedTrashedAssignments.map((assignment) => (
                     <TableRow key={assignment.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center text-muted-foreground">
@@ -446,6 +618,7 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                         Deleted: {new Date(assignment.deleted_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-center text-muted-foreground">{assignment.submissions_count || 0}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">-</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button 
                           variant="outline" 
@@ -467,16 +640,16 @@ export default function DashboardClient({ assignments, students, trashedAssignme
                     </TableRow>
                   ))}
 
-                  {activeTab === "active" && assignments.length === 0 && (
+                  {activeTab === "active" && processedAssignments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center">
+                      <TableCell colSpan={6} className="h-24 text-center">
                         No active assignments found.
                       </TableCell>
                     </TableRow>
                   )}
-                  {activeTab === "trash" && trashedAssignments.length === 0 && (
+                  {activeTab === "trash" && processedTrashedAssignments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                         Trash is empty.
                       </TableCell>
                     </TableRow>
