@@ -21,6 +21,31 @@ async function handler(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    // 0. Verify the assignment's current state to handle Zombie Events
+    const { data: existingAssignment, error: fetchError } = await adminSupabase
+      .from("assignments")
+      .select("id, is_hidden, deleted_at")
+      .eq("id", assignmentId)
+      .single();
+
+    if (fetchError || !existingAssignment) {
+      // Hard-deleted or doesn't exist
+      console.log(`Skipping webhook for ${assignmentId}: Assignment not found.`);
+      return NextResponse.json({ success: true, message: "Assignment not found, skipping." });
+    }
+
+    if (existingAssignment.deleted_at !== null) {
+      // Soft-deleted
+      console.log(`Skipping webhook for ${assignmentId}: Assignment is in trash.`);
+      return NextResponse.json({ success: true, message: "Assignment deleted, skipping." });
+    }
+
+    if (existingAssignment.is_hidden === false) {
+      // Already published manually
+      console.log(`Skipping webhook for ${assignmentId}: Assignment already published.`);
+      return NextResponse.json({ success: true, message: "Assignment already visible, skipping." });
+    }
+
     // 1. Unhide the assignment and clear publish_at
     const { data: assignmentData, error: assignmentError } = await adminSupabase
       .from("assignments")
