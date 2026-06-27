@@ -1,24 +1,22 @@
-import { getAssignments } from "@/lib/actions/assignments";
-import StudentDashboardClient from "./StudentDashboardClient";
 import { Suspense } from "react";
+import StudentDashboardData from "./StudentDashboardData";
+import StudentGridSkeleton from "@/components/student/StudentGridSkeleton";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudentDashboardPage() {
-  const { data: assignments, error } = await getAssignments({});
-
-  if (error) {
-    return (
-      <div className="p-8 text-center text-red-500">
-        <h2 className="text-2xl font-bold mb-2">Error Loading Dashboard</h2>
-        <p>{error}</p>
-      </div>
-    );
-  }
-
+export default function StudentDashboardPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center">Loading dashboard...</div>}>
-      <StudentDashboardClient assignments={assignments || []} />
-    </Suspense>
+    <div className="container mx-auto max-w-4xl p-4 md:p-8 space-y-8">
+      {/* STATIC SHELL: Renders instantly! */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Student Dashboard</h1>
+        <p className="text-muted-foreground">View and submit your assignments.</p>
+      </div>
+
+      {/* GRANULAR SUSPENSE BOUNDARY */}
+      <Suspense fallback={<StudentGridSkeleton />}>
+        <StudentDashboardData />
+      </Suspense>
+    </div>
   );
 }

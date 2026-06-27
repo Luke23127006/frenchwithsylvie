@@ -68,12 +68,7 @@ export default function StudentDashboardClient({ assignments }: StudentDashboard
     });
 
   return (
-    <div className="container mx-auto max-w-4xl p-4 md:p-8 space-y-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Student Dashboard</h1>
-        <p className="text-muted-foreground">View and submit your assignments.</p>
-      </div>
-
+    <>
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -159,6 +154,6 @@ export default function StudentDashboardClient({ assignments }: StudentDashboard
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
