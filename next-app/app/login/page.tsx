@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -43,11 +43,15 @@ export default function LoginPage() {
       if (result?.error) {
         // Render the error state UI
         setError(result.error);
-      } else if (result?.data?.redirectUrl) {
-        window.location.href = result.data.redirectUrl;
       } else {
-        // Default to student if undefined, though it shouldn't be
-        window.location.href = "/student";
+        if (result?.data?.redirectUrl) {
+          window.location.href = result.data.redirectUrl;
+        } else {
+          // Default to student if undefined, though it shouldn't be
+          window.location.href = "/student";
+        }
+        // Keep the loading state active indefinitely while the page unloads
+        await new Promise(() => {});
       }
     });
   };
@@ -93,7 +97,14 @@ export default function LoginPage() {
             )}
             
             <Button type="submit" className="w-full h-11 text-base mt-2" disabled={isPending}>
-              {isPending ? "Signing in..." : "Sign In"}
+              {isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </Button>
           </form>
         </CardContent>
