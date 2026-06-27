@@ -431,32 +431,6 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                     <><CheckCircle2 className="mr-2 h-5 w-5" /> Submit Assignment</>
                   )}
                 </Button>
-
-                {/* Upload Progress */}
-                {Object.entries(uploadProgress).length > 0 && (
-                  <div className="space-y-3 mt-4 p-4 border rounded-md bg-secondary/20">
-                    <p className="text-sm font-medium mb-1 flex items-center">
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Uploading...
-                    </p>
-                    {stagedAttachments.map((att) => {
-                      const progress = uploadProgress[att.id] || 0;
-                      return (
-                        <div key={att.id} className="space-y-1.5">
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span className="truncate max-w-[200px]">{att.name}</span>
-                            <span>{progress}%</span>
-                          </div>
-                          <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-primary h-full transition-all duration-300"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
               </CardContent>
             </Card>
           ) : (
