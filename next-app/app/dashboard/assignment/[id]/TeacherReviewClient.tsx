@@ -136,6 +136,11 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
 
   const handleSaveGrade = () => {
     if (!selectedAssignee || !selectedAssignee.submission) return;
+
+    if (!grade) {
+      toast.error("Vui lòng nhập điểm số!");
+      return;
+    }
     
     // Validation
     const gradeNum = parseInt(grade, 10);
