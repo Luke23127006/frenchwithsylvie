@@ -23,7 +23,7 @@ export const getStudentDetailedAnalytics = createSafeAction(
   ["teacher", "admin"],
   async ({ input, supabase }) => {
     // STRICT ENFORCEMENT: Using Promise.all inside the safe action to fetch independent datasets concurrently
-    const [profileRes, submissionsRes] = await Promise.all([
+    const [profileRes, submissionsRes, assignedRes] = await Promise.all([
       supabase
         .from("users")
         .select("id, full_name, username, role")
@@ -33,14 +33,20 @@ export const getStudentDetailedAnalytics = createSafeAction(
         .from("submissions")
         .select("*, assignments(title)")
         .eq("student_id", input.studentId)
-        .order("submitted_at", { ascending: true })
+        .order("submitted_at", { ascending: true }),
+      supabase
+        .from("assignment_assignees")
+        .select("assignments(id, title, created_at, is_hidden)")
+        .eq("student_id", input.studentId)
     ]);
 
     return {
       profile: profileRes.data,
       profileError: profileRes.error,
       submissions: submissionsRes.data,
-      submissionsError: submissionsRes.error
+      submissionsError: submissionsRes.error,
+      assigned: assignedRes.data,
+      assignedError: assignedRes.error
     };
   }
 );

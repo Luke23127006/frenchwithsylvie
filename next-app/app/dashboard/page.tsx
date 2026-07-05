@@ -3,6 +3,7 @@ import TeacherDashboardData from "./TeacherDashboardData";
 import TeacherDashboardSkeleton from "@/components/dashboard/TeacherDashboardSkeleton";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { TrendingUp } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,10 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">Manage your assignments and view student submissions.</p>
         </div>
         <Link href="/dashboard/analytics">
-          <Button>Class Analytics</Button>
+          <Button>
+            <TrendingUp className="mr-2 h-4 w-4" />
+            Class Analytics
+          </Button>
         </Link>
       </div>
 

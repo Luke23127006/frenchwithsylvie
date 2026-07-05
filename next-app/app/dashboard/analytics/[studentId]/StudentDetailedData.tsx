@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { getStudentDetailedAnalytics } from "@/lib/actions/analytics";
 import { notFound, redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default async function StudentDetailedData({ studentId }: { studentId: string }) {
   const result = await getStudentDetailedAnalytics({ studentId });
@@ -29,12 +31,18 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
     );
   }
 
-  const { profile, submissions, profileError } = result.data!;
+  const { profile, submissions, profileError, assigned } = result.data!;
   const safeSubmissions = submissions || [];
+  const safeAssigned = assigned || [];
 
   if (profileError || !profile) {
     notFound();
   }
+
+  const submittedAssignmentIds = new Set(safeSubmissions.map((s: any) => s.assignment_id));
+  const missingAssignments = safeAssigned
+    .map((a: any) => a.assignments)
+    .filter((a: any) => a && !a.is_hidden && !submittedAssignmentIds.has(a.id));
 
   const gradedSubmissions = safeSubmissions.filter((s: any) => s.numeric_grade !== null);
   const overallAverage = gradedSubmissions.length > 0 
@@ -84,6 +92,7 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
               <TableHead>Submitted On</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Grade</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -103,13 +112,35 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
                   <TableCell className="text-right font-medium">
                     {sub.numeric_grade !== null ? `${sub.numeric_grade}/100` : '-'}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="secondary" size="sm" asChild>
+                      <Link href={`/dashboard/assignment/${sub.assignment_id}`}>View</Link>
+                    </Button>
+                  </TableCell>
                 </TableRow>
               );
             })}
-            {safeSubmissions.length === 0 && (
+            {missingAssignments.map((assignment: any) => (
+              <TableRow key={`missing-${assignment.id}`} className="bg-red-50/50 dark:bg-red-950/20">
+                <TableCell className="font-medium text-red-600 dark:text-red-400">{assignment.title || "Unknown"}</TableCell>
+                <TableCell className="text-muted-foreground">-</TableCell>
+                <TableCell>
+                  <Badge variant="destructive">Missing</Badge>
+                </TableCell>
+                <TableCell className="text-right font-medium text-muted-foreground">
+                  -
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="secondary" size="sm" asChild>
+                    <Link href={`/dashboard/assignment/${assignment.id}`}>View</Link>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {safeSubmissions.length === 0 && missingAssignments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
-                  No submissions found.
+                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                  No submissions or missing assignments found.
                 </TableCell>
               </TableRow>
             )}
