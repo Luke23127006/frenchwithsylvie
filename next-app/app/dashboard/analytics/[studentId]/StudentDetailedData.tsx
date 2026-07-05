@@ -15,6 +15,8 @@ import { notFound, redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
+import StudentSubmissionsTable from "@/components/dashboard/StudentSubmissionsTable";
+
 export default async function StudentDetailedData({ studentId }: { studentId: string }) {
   const result = await getStudentDetailedAnalytics({ studentId });
 
@@ -57,6 +59,29 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
     numeric_grade: s.numeric_grade
   }));
 
+  const allItems = [
+    ...safeSubmissions.map((s: any) => ({
+      id: s.id,
+      assignment_id: s.assignment_id,
+      title: Array.isArray(s.assignments) ? s.assignments[0]?.title : s.assignments?.title,
+      submitted_at: s.submitted_at,
+      status: s.numeric_grade !== null ? "graded" : "pending",
+      grade: s.numeric_grade,
+      isMissing: false,
+      timestamp: new Date(s.submitted_at).getTime()
+    })),
+    ...missingAssignments.map((a: any) => ({
+      id: `missing-${a.id}`,
+      assignment_id: a.id,
+      title: a.title,
+      submitted_at: null,
+      status: "missing",
+      grade: null,
+      isMissing: true,
+      timestamp: new Date(a.created_at).getTime()
+    }))
+  ];
+
   return (
     <div className="space-y-6 print:space-y-4">
       {/* Profile Header */}
@@ -81,72 +106,7 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
       </div>
 
       {/* Submissions History Table */}
-      <div className="rounded-xl border bg-card text-card-foreground shadow overflow-hidden print:shadow-none print:border-gray-300">
-        <div className="p-6 border-b print:p-4">
-          <h3 className="font-semibold text-lg">Submission History</h3>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Assignment</TableHead>
-              <TableHead>Submitted On</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Grade</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {safeSubmissions.map((sub: any) => {
-              const title = Array.isArray(sub.assignments) ? sub.assignments[0]?.title : sub.assignments?.title;
-              return (
-                <TableRow key={sub.id}>
-                  <TableCell className="font-medium">{title || "Unknown"}</TableCell>
-                  <TableCell>{format(new Date(sub.submitted_at), "MMM dd, yyyy HH:mm")}</TableCell>
-                  <TableCell>
-                    {sub.numeric_grade !== null ? (
-                      <Badge variant="default" className="bg-green-500 hover:bg-green-600">Graded</Badge>
-                    ) : (
-                      <Badge variant="secondary">Pending Review</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {sub.numeric_grade !== null ? `${sub.numeric_grade}/100` : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="secondary" size="sm" asChild>
-                      <Link href={`/dashboard/assignment/${sub.assignment_id}`}>View</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {missingAssignments.map((assignment: any) => (
-              <TableRow key={`missing-${assignment.id}`} className="bg-red-50/50 dark:bg-red-950/20">
-                <TableCell className="font-medium text-red-600 dark:text-red-400">{assignment.title || "Unknown"}</TableCell>
-                <TableCell className="text-muted-foreground">-</TableCell>
-                <TableCell>
-                  <Badge variant="destructive">Missing</Badge>
-                </TableCell>
-                <TableCell className="text-right font-medium text-muted-foreground">
-                  -
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button variant="secondary" size="sm" asChild>
-                    <Link href={`/dashboard/assignment/${assignment.id}`}>View</Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {safeSubmissions.length === 0 && missingAssignments.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                  No submissions or missing assignments found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <StudentSubmissionsTable data={allItems} />
     </div>
   );
 }
