@@ -14,6 +14,7 @@ import { format, subDays, startOfYear, isAfter, isBefore, parseISO } from "date-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface SubmissionData {
   id: string;
@@ -28,8 +29,8 @@ interface GradeTrendChartProps {
 
 export default function GradeTrendChart({ data }: GradeTrendChartProps) {
   const [range, setRange] = useState("all_time");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [customStart, setCustomStart] = useState<Date>();
+  const [customEnd, setCustomEnd] = useState<Date>();
 
   const filteredData = useMemo(() => {
     let filtered = [...data];
@@ -45,10 +46,11 @@ export default function GradeTrendChart({ data }: GradeTrendChartProps) {
       const threshold = startOfYear(now);
       filtered = filtered.filter(d => isAfter(new Date(d.submitted_at), threshold));
     } else if (range === "custom" && customStart && customEnd) {
+      // Create copies to avoid mutating state
       const start = new Date(customStart);
       const end = new Date(customEnd);
-      // set end of day for the end date
-      end.setHours(23, 59, 59, 999);
+      end.setHours(23, 59, 59, 999); // Include the whole end day
+
       filtered = filtered.filter(d => {
         const date = new Date(d.submitted_at);
         return isAfter(date, start) && isBefore(date, end);
@@ -61,45 +63,57 @@ export default function GradeTrendChart({ data }: GradeTrendChartProps) {
     }));
   }, [data, range, customStart, customEnd]);
 
+  const gradedData = filteredData.filter(d => d.numeric_grade !== null);
+  const averageScore = gradedData.length > 0 
+    ? gradedData.reduce((acc, curr) => acc + curr.numeric_grade!, 0) / gradedData.length 
+    : 0;
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 items-end print:hidden">
-        <div className="space-y-1.5 w-[200px]">
-          <Label>Time Range</Label>
-          <Select value={range} onValueChange={setRange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select range" />
-            </SelectTrigger>
-            <SelectContent position="popper" side="bottom" sideOffset={4} >
-              <SelectItem value="all_time">All Time</SelectItem>
-              <SelectItem value="last_7_days">Last 7 Days</SelectItem>
-              <SelectItem value="last_30_days">Last 30 Days</SelectItem>
-              <SelectItem value="this_year">This Year</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 print:hidden w-full">
+        <div className="flex flex-col sm:flex-row gap-4 items-end">
+          <div className="space-y-1.5 w-[200px]">
+            <Label>Time Range</Label>
+            <Select value={range} onValueChange={setRange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select range" />
+              </SelectTrigger>
+              <SelectContent position="popper" side="bottom" sideOffset={4}>
+                <SelectItem value="all_time">All Time</SelectItem>
+                <SelectItem value="last_7_days">Last 7 Days</SelectItem>
+                <SelectItem value="last_30_days">Last 30 Days</SelectItem>
+                <SelectItem value="this_year">This Year</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {range === "custom" && (
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+              <div className="p-2 border rounded-md bg-muted/10 relative">
+                <span className="absolute -top-2.5 left-2 bg-card px-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Start</span>
+                <DatePicker 
+                  date={customStart} 
+                  setDate={setCustomStart} 
+                />
+              </div>
+              <div className="p-2 border rounded-md bg-muted/10 relative">
+                <span className="absolute -top-2.5 left-2 bg-card px-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">End</span>
+                <DatePicker 
+                  date={customEnd} 
+                  setDate={setCustomEnd} 
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {range === "custom" && (
-          <div className="flex gap-2 items-center">
-            <div className="space-y-1.5">
-              <Label>Start Date</Label>
-              <Input 
-                type="date" 
-                value={customStart} 
-                onChange={e => setCustomStart(e.target.value)} 
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>End Date</Label>
-              <Input 
-                type="date" 
-                value={customEnd} 
-                onChange={e => setCustomEnd(e.target.value)} 
-              />
-            </div>
-          </div>
-        )}
+        <div className="text-right pb-1">
+          <p className="text-sm text-muted-foreground">Range Average</p>
+          <p className="text-2xl font-bold text-primary">
+            {averageScore > 0 ? averageScore.toFixed(2) : 'N/A'}
+          </p>
+        </div>
       </div>
 
       <div className="w-full h-[300px] mt-4 print:h-[250px] print:mt-0">

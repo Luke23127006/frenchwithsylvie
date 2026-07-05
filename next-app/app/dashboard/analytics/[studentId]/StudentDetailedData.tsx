@@ -65,7 +65,7 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
       assignment_id: s.assignment_id,
       title: Array.isArray(s.assignments) ? s.assignments[0]?.title : s.assignments?.title,
       submitted_at: s.submitted_at,
-      status: s.numeric_grade !== null ? "graded" : "pending",
+      status: (s.numeric_grade !== null ? "graded" : "pending") as "graded" | "pending" | "missing",
       grade: s.numeric_grade,
       isMissing: false,
       timestamp: new Date(s.submitted_at).getTime()
@@ -75,7 +75,7 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
       assignment_id: a.id,
       title: a.title,
       submitted_at: null,
-      status: "missing",
+      status: "missing" as "graded" | "pending" | "missing",
       grade: null,
       isMissing: true,
       timestamp: new Date(a.created_at).getTime()
