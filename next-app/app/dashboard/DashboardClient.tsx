@@ -44,6 +44,7 @@ import {
 import toast from "react-hot-toast";
 import Link from "next/link";
 import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
+import { DatePickerTime } from "@/components/ui/date-picker-time";
 
 interface Student {
   id: string;
@@ -336,15 +337,11 @@ export default function DashboardClient({ assignments, students, trashedAssignme
               </div>
               
               {isScheduled && (
-                <div className="grid gap-2">
-                  <Label htmlFor="publishAt">Publish Date & Time</Label>
-                  <Input 
-                    id="publishAt" 
-                    type="datetime-local" 
+                <div className="space-y-2">
+                  <DatePickerTime
                     value={publishAt}
-                    onChange={(e) => setPublishAt(e.target.value)}
+                    onChange={(val) => setPublishAt(val)}
                     disabled={isPending || isUploading}
-                    required={isScheduled}
                   />
                 </div>
               )}
