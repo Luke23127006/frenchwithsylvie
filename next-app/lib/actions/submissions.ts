@@ -198,6 +198,7 @@ export const submitSolution = createSafeAction(
     }
 
     revalidatePath(`/dashboard/assignment/${input.assignmentId}`);
+    revalidatePath(`/dashboard/analytics/${user.id}`);
     return data;
   }
 );
@@ -342,6 +343,7 @@ export const gradeSubmission = createSafeAction(
     }
 
     revalidatePath(`/dashboard/assignment/${data.assignment_id}`);
+    if (data.student_id) revalidatePath(`/dashboard/analytics/${data.student_id}`);
     return data;
   }
 );
@@ -394,6 +396,7 @@ export const removeSubmission = createSafeAction(
     if (error) throw new Error(error.message);
 
     revalidatePath(`/assignment/${input.assignmentId}`);
+    revalidatePath(`/dashboard/analytics/${user.id}`);
     return { success: true };
   }
 );

@@ -22,7 +22,7 @@ export const getStudentDetailedAnalytics = createSafeAction(
   z.object({ studentId: z.string() }),
   ["teacher", "admin"],
   async ({ input, supabase }) => {
-    // STRICT ENFORCEMENT: Using Promise.all inside the safe action to fetch independent datasets concurrently
+    // Fetch only report fields, with independent queries running concurrently.
     const [profileRes, submissionsRes, assignedRes] = await Promise.all([
       supabase
         .from("users")
@@ -31,7 +31,7 @@ export const getStudentDetailedAnalytics = createSafeAction(
         .single(),
       supabase
         .from("submissions")
-        .select("*, assignments(title)")
+        .select("id, assignment_id, submitted_at, grade, feedback, assignments(title)")
         .eq("student_id", input.studentId)
         .order("submitted_at", { ascending: true }),
       supabase
@@ -39,6 +39,10 @@ export const getStudentDetailedAnalytics = createSafeAction(
         .select("assignments(id, title, created_at, is_hidden)")
         .eq("student_id", input.studentId)
     ]);
+
+    // A failed query must not turn submitted work into "Missing" rows.
+    if (submissionsRes.error) throw new Error(submissionsRes.error.message);
+    if (assignedRes.error) throw new Error(assignedRes.error.message);
 
     return {
       profile: profileRes.data,

@@ -111,7 +111,7 @@ export default function GradeTrendChart({ data }: GradeTrendChartProps) {
         <div className="text-right pb-1">
           <p className="text-sm text-muted-foreground">Range Average</p>
           <p className="text-2xl font-bold text-primary">
-            {averageScore > 0 ? averageScore.toFixed(2) : 'N/A'}
+            {gradedData.length > 0 ? averageScore.toFixed(2) : 'N/A'}
           </p>
         </div>
       </div>

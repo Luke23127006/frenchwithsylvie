@@ -16,13 +16,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
+import type { SubmissionStatus } from "@/lib/submission-review";
 
 interface TableRowData {
   id: string;
   assignment_id: string;
   title: string;
   submitted_at: string | null;
-  status: "graded" | "pending" | "missing";
+  status: SubmissionStatus;
   grade: number | null;
   isMissing: boolean;
   timestamp: number;
@@ -98,6 +99,7 @@ export default function StudentSubmissionsTable({ data }: StudentSubmissionsTabl
             <SelectContent position="popper" side="bottom" sideOffset={4}>
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="graded">Graded</SelectItem>
+              <SelectItem value="reviewed">Reviewed</SelectItem>
               <SelectItem value="pending">Pending Review</SelectItem>
               <SelectItem value="missing">Missing</SelectItem>
             </SelectContent>
@@ -145,6 +147,9 @@ export default function StudentSubmissionsTable({ data }: StudentSubmissionsTabl
                 )}
                 {row.status === "pending" && (
                   <Badge variant="secondary">Pending Review</Badge>
+                )}
+                {row.status === "reviewed" && (
+                  <Badge variant="outline">Reviewed</Badge>
                 )}
                 {row.status === "missing" && (
                   <Badge variant="destructive">Missing</Badge>

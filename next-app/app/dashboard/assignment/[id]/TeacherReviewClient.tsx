@@ -24,7 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { updateAssignees, updateAssignmentTitle } from "@/lib/actions/assignments";
 import { gradeSubmission } from "@/lib/actions/submissions";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -84,6 +84,7 @@ interface TeacherReviewClientProps {
 }
 
 export default function TeacherReviewClient({ assignmentData, allStudents }: TeacherReviewClientProps) {
+  const router = useRouter();
   const [selectedAssignee, setSelectedAssignee] = useState<Assignee | null>(null);
   const [selectedPreviewDocUrl, setSelectedPreviewDocUrl] = useState<string | null>(null);
   
@@ -238,10 +239,8 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
     <div className="container mx-auto max-w-7xl p-4 md:p-8 space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/dashboard">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
+          <Button type="button" variant="ghost" size="icon" aria-label="Go back" onClick={() => router.back()}>
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             {isEditingTitle ? (
