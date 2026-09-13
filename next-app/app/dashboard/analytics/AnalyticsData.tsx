@@ -1,8 +1,7 @@
 import { getClassOverviewData } from "@/lib/actions/analytics";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { getAverageGrade } from "@/lib/analytics";
 import {
   Table,
   TableBody,
@@ -31,9 +30,7 @@ export default async function AnalyticsData() {
 
   const overviewData = result.data || [];
 
-  const classAvg = overviewData.length > 0 
-    ? overviewData.reduce((acc: number, row: any) => acc + (row.average_grade || 0), 0) / overviewData.filter((r:any) => r.average_grade !== null).length || 0 
-    : 0;
+  const classAvg = getAverageGrade(overviewData.map((row) => row.average_grade));
 
   return (
     <div className="space-y-6">
@@ -44,12 +41,12 @@ export default async function AnalyticsData() {
         </div>
         <div className="rounded-xl border bg-card p-6 text-card-foreground shadow">
           <h3 className="font-semibold text-lg">Class Average</h3>
-          <p className="text-3xl font-bold mt-2">{classAvg.toFixed(2)}</p>
+          <p className="text-3xl font-bold mt-2">{classAvg !== null ? classAvg.toFixed(2) : 'N/A'}</p>
         </div>
         <div className="rounded-xl border bg-card p-6 text-card-foreground shadow">
           <h3 className="font-semibold text-lg">Completion Rate Avg</h3>
           <p className="text-3xl font-bold mt-2">
-            {(overviewData.reduce((acc: number, row: any) => acc + (row.completion_rate || 0), 0) / (overviewData.length || 1)).toFixed(1)}%
+            {(overviewData.reduce((acc, row) => acc + row.completion_rate, 0) / (overviewData.length || 1)).toFixed(1)}%
           </p>
         </div>
       </div>
@@ -67,13 +64,13 @@ export default async function AnalyticsData() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {overviewData.map((student: any) => (
+            {overviewData.map((student) => (
               <TableRow key={student.student_id}>
                 <TableCell className="font-medium">{student.student_name}</TableCell>
                 <TableCell>{student.total_assigned}</TableCell>
                 <TableCell>{student.total_submitted}</TableCell>
                 <TableCell>{student.completion_rate ? Number(student.completion_rate).toFixed(1) : 0}%</TableCell>
-                <TableCell>{student.average_grade ? Number(student.average_grade).toFixed(2) : 'N/A'}</TableCell>
+                <TableCell>{student.average_grade !== null ? student.average_grade.toFixed(2) : 'N/A'}</TableCell>
                 <TableCell className="text-right">
                   <Link href={`/dashboard/analytics/${student.student_id}`}>
                     <Button variant="outline" size="sm">View Report</Button>

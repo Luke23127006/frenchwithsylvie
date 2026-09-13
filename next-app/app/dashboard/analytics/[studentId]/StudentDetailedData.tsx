@@ -2,6 +2,7 @@ import GradeTrendChart from "@/components/dashboard/GradeTrendChart";
 import { getStudentDetailedAnalytics } from "@/lib/actions/analytics";
 import { notFound, redirect } from "next/navigation";
 import { getSubmissionReview } from "@/lib/submission-review";
+import { getAverageGrade } from "@/lib/analytics";
 
 import StudentSubmissionsTable from "@/components/dashboard/StudentSubmissionsTable";
 
@@ -42,10 +43,7 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
     .flatMap((a) => a.assignments || [])
     .filter((a) => !a.is_hidden && !submittedAssignmentIds.has(a.id));
 
-  const gradedSubmissions = safeSubmissions.filter((s) => s.review.numericGrade !== null);
-  const overallAverage = gradedSubmissions.length > 0 
-    ? gradedSubmissions.reduce((acc, curr) => acc + curr.review.numericGrade!, 0) / gradedSubmissions.length
-    : 0;
+  const overallAverage = getAverageGrade(safeSubmissions.map((s) => s.review.numericGrade));
 
   // Format data for chart
   const chartData = safeSubmissions.map((s) => ({
@@ -91,7 +89,7 @@ export default async function StudentDetailedData({ studentId }: { studentId: st
         </div>
         <div className="ml-auto text-right">
           <p className="text-sm text-muted-foreground">Overall Average</p>
-          <p className="text-3xl font-bold">{gradedSubmissions.length > 0 ? overallAverage.toFixed(2) : 'N/A'}</p>
+          <p className="text-3xl font-bold">{overallAverage !== null ? overallAverage.toFixed(2) : 'N/A'}</p>
         </div>
       </div>
 

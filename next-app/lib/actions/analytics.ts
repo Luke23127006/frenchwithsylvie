@@ -1,20 +1,22 @@
 import { createSafeAction } from "../safe-action";
 import { z } from "zod";
+import { getStudentOverview } from "../analytics";
 
 export const getClassOverviewData = createSafeAction(
   z.object({}),
   ["teacher", "admin"],
   async ({ supabase }) => {
     const { data, error } = await supabase
-      .from("student_analytics_view")
-      .select("*")
-      .order("student_name", { ascending: true });
+      .from("users")
+      .select("id, full_name, assignment_assignees(assignment_id), submissions(assignment_id, grade)")
+      .eq("role", "student")
+      .order("full_name", { ascending: true });
 
     if (error) {
       console.error("Failed to fetch class overview:", error);
       throw new Error(error.message);
     }
-    return data;
+    return (data || []).map(getStudentOverview);
   }
 );
 
