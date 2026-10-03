@@ -5,6 +5,7 @@ import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes"
 
 function ThemeProvider({
   children,
+  scriptProps,
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
   return (
@@ -14,6 +15,13 @@ function ThemeProvider({
       enableSystem
       disableTransitionOnChange
       {...props}
+      scriptProps={{
+        ...scriptProps,
+        // Run the anti-flash bootstrap in server HTML only. On client remounts,
+        // next-themes applies the theme in its effect; an inert data block avoids
+        // asking React to create an executable inline script it cannot run.
+        type: typeof window === "undefined" ? "text/javascript" : "application/x-next-themes",
+      }}
     >
       <ThemeHotkey />
       {children}

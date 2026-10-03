@@ -19,6 +19,7 @@ export async function uploadFile(formData: FormData) {
 
     const file = formData.get("file") as File;
     const bucketName = formData.get("bucketName") as string;
+    if (!["assignments", "submissions"].includes(bucketName)) return { error: "Invalid upload bucket" };
     
     if (!file) {
       return { error: "No file provided" };
@@ -68,6 +69,7 @@ export async function getSignedUploadUrls(input: { files: { fileName: string, bu
     );
 
     const results = await Promise.all(input.files.map(async (f) => {
+      if (!["assignments", "submissions"].includes(f.bucketName)) throw new Error("Invalid upload bucket");
       const fileExt = f.fileName.split('.').pop();
       const newFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
       

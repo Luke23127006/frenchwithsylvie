@@ -18,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { v4 as uuidv4 } from "uuid";
 import { MultiAttachmentUploader, StagedAttachment } from "@/components/MultiAttachmentUploader";
 import Link from "next/link";
+import FeedbackPdfList from "@/components/FeedbackPdfList";
 
 
 
@@ -485,6 +486,7 @@ export default function StudentPortalClient({ assignment, existingSubmission }: 
                     ) : (
                       <p className="text-muted-foreground italic">No written feedback provided.</p>
                     )}
+                    <FeedbackPdfList key={submission.id} submissionId={submission.id} />
                   </CardContent>
                 </Card>
               )}

@@ -26,9 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { updateAssignees, updateAssignmentTitle } from "@/lib/actions/assignments";
-import { gradeSubmission } from "@/lib/actions/submissions";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
-import { getRatingInfo } from "@/lib/utils";
+import ReviewEditor from "@/components/dashboard/ReviewEditor";
 
 interface Student {
   id: string;
@@ -95,20 +93,26 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
     assignmentData.assignees.map(a => a.id)
   );
   
-  // Grading State
-  const [grade, setGrade] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [reviewDirty, setReviewDirty] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [updatedReviews, setUpdatedReviews] = useState<Record<string, Submission>>({});
+  const assignees = assignmentData.assignees.map((assignee) => ({
+    ...assignee, submission: updatedReviews[assignee.id] || assignee.submission,
+  }));
+
+  const canLeaveReview = () => {
+    if (reviewBusy) { toast.error("Please wait for the review to finish saving."); return false; }
+    return !reviewDirty || window.confirm("Discard unsaved review changes?");
+  };
 
   const [isPending, startTransition] = useTransition();
 
   // Update grading state when assignee changes
   const handleSelectAssignee = (assignee: Assignee) => {
+    if (selectedAssignee?.id === assignee.id || !canLeaveReview()) return;
+    setReviewDirty(false);
     setSelectedAssignee(assignee);
     setSelectedPreviewDocUrl(null);
-    if (assignee.submission) {
-      setGrade(assignee.submission.grade || "");
-      setFeedback(assignee.submission.feedback || "");
-    }
   };
 
   const handleStudentToggle = (studentId: string) => {
@@ -135,73 +139,6 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
     });
   };
 
-  const handleSaveGrade = () => {
-    if (!selectedAssignee || !selectedAssignee.submission) return;
-
-    if (!grade) {
-      toast.error("Vui lòng nhập điểm số!");
-      return;
-    }
-    
-    // Validation
-    const gradeNum = parseInt(grade, 10);
-    if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
-      toast.error("Grade must be an integer between 0 and 100.");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const result = await gradeSubmission({ submissionId: selectedAssignee.submission!.id, grade: gradeNum.toString(), feedback: feedback });
-        if (result.error) {
-          toast.error("Failed to save grade: " + result.error);
-        } else {
-          toast.success("Grade and feedback saved successfully!");
-          // Update local state to reflect changes without a full page reload
-          setSelectedAssignee({
-            ...selectedAssignee,
-            submission: {
-              ...selectedAssignee.submission!,
-              grade,
-              feedback
-            } as Submission
-          });
-        }
-      } catch (e: any) {
-        toast.error("Error: " + e.message);
-      }
-    });
-  };
-  const handleRemoveGrade = () => {
-    if (!selectedAssignee || !selectedAssignee.submission) return;
-
-    if (!window.confirm("Are you sure you want to remove the grade and feedback for this submission?")) {
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const result = await gradeSubmission({ submissionId: selectedAssignee.submission!.id, grade: null, feedback: null });
-        if (result.error) {
-          toast.error("Failed to remove grade: " + result.error);
-        } else {
-          toast.success("Grade and feedback removed successfully!");
-          setGrade("");
-          setFeedback("");
-          setSelectedAssignee({
-            ...selectedAssignee,
-            submission: {
-              ...selectedAssignee.submission!,
-              grade: null,
-              feedback: null
-            } as Submission
-          });
-        }
-      } catch (e: any) {
-        toast.error("Error: " + e.message);
-      }
-    });
-  };
   const filteredStudents = allStudents.filter(s => 
     s.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -239,7 +176,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
     <div className="container mx-auto max-w-7xl p-4 md:p-8 space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <Button type="button" variant="ghost" size="icon" aria-label="Go back" onClick={() => router.back()}>
+          <Button type="button" variant="ghost" size="icon" aria-label="Go back" onClick={() => { if (canLeaveReview()) router.back(); }}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -397,7 +334,7 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                   <p>No students assigned.</p>
                 </div>
               ) : (
-                assignmentData.assignees.map((assignee) => (
+                assignees.map((assignee) => (
                   <button
                     key={assignee.id}
                     onClick={() => handleSelectAssignee(assignee)}
@@ -571,58 +508,17 @@ export default function TeacherReviewClient({ assignmentData, allStudents }: Tea
                 </div>
               </Card>
 
-              {/* Grading Panel */}
-              <Card className="w-full flex-shrink-0">
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-lg">Grading & Feedback</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="grade">Grade / Score (0-100)</Label>
-                        <div className="flex space-x-2 items-center">
-                          <Input 
-                            id="grade" 
-                            type="number"
-                            min="0"
-                            max="100"
-                            placeholder="e.g. 95" 
-                            value={grade}
-                            onChange={(e) => setGrade(e.target.value)}
-                            disabled={isPending}
-                            className="w-24"
-                          />
-                          <span className="text-muted-foreground">/ 100</span>
-                        </div>
-                        {getRatingInfo(grade) && (
-                          <div className="mt-2">
-                            <Badge className={getRatingInfo(grade)?.color}>
-                              {getRatingInfo(grade)?.label}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Feedback (Rich Text)</Label>
-                        <RichTextEditor 
-                          value={feedback} 
-                          onChange={setFeedback}
-                          disabled={isPending}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap justify-end gap-2">
-                      {(selectedAssignee.submission.grade || selectedAssignee.submission.feedback) && (
-                        <Button variant="destructive" onClick={handleRemoveGrade} disabled={isPending}>
-                          <Trash2 className="mr-2 h-4 w-4" /> {isPending ? "Removing..." : "Remove"}
-                        </Button>
-                      )}
-                      <Button onClick={handleSaveGrade} disabled={isPending}>
-                        <Save className="mr-2 h-4 w-4" /> {isPending ? "Saving..." : "Save Grade"}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+              <ReviewEditor
+                key={selectedAssignee.submission.id}
+                submission={selectedAssignee.submission}
+                onDirtyChange={setReviewDirty}
+                onBusyChange={setReviewBusy}
+                onSaved={(review) => {
+                  const updated = { ...selectedAssignee.submission!, ...review };
+                  setUpdatedReviews((previous) => ({ ...previous, [selectedAssignee.id]: updated }));
+                  setSelectedAssignee({ ...selectedAssignee, submission: updated });
+                }}
+              />
             </>
           )}
         </div>

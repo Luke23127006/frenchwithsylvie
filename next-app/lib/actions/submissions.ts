@@ -8,6 +8,9 @@ import React from "react";
 import AssignmentGradedEmail from "@/emails/AssignmentGradedEmail";
 import SubmissionReceivedEmail from "@/emails/SubmissionReceivedEmail";
 import { createClient } from "@supabase/supabase-js";
+import { after } from "next/server";
+import { saveReviewSchema } from "../feedback";
+import { cleanupFeedbackFiles, saveFeedbackReview } from "../feedback-server";
 
 export const submitSolution = createSafeAction(
   z.object({
@@ -237,26 +240,11 @@ export const getSubmissionsByAssignment = createSafeAction(
 );
 
 export const gradeSubmission = createSafeAction(
-  z.object({
-    submissionId: z.string(),
-    grade: z.string().nullable(),
-    feedback: z.string().nullable()
-  }),
+  saveReviewSchema,
   ["teacher"],
-  async ({ input, user, supabase }) => {
-    const { data, error } = await supabase
-      .from("submissions")
-      .update({ grade: input.grade, feedback: input.feedback })
-      .eq("id", input.submissionId)
-      .select(`
-        *,
-        assignments (
-          title
-        )
-      `)
-      .single();
-
-    if (error) throw new Error(error.message);
+  async ({ input, user }) => {
+    const data = await saveFeedbackReview(user, input);
+    after(async () => { try { await cleanupFeedbackFiles(); } catch (error) { console.error("Feedback cleanup:", error); } });
 
     // Asynchronously send email to student if opted in
     const resendApiKey = process.env.RESEND_API_KEY;
@@ -344,6 +332,21 @@ export const gradeSubmission = createSafeAction(
     }
 
     revalidatePath(`/dashboard/assignment/${data.assignment_id}`);
+    revalidatePath(`/assignment/${data.assignment_id}`);
+    if (data.student_id) revalidatePath(`/dashboard/analytics/${data.student_id}`);
+    revalidatePath("/dashboard/analytics");
+    return data;
+  }
+);
+
+export const removeSubmissionReview = createSafeAction(
+  z.object({ submissionId: z.string().uuid() }), ["teacher"], async ({ input, user }) => {
+    const data = await saveFeedbackReview(user, {
+      submissionId: input.submissionId, grade: null, feedback: null, attachmentIds: [],
+    });
+    after(async () => { try { await cleanupFeedbackFiles(); } catch (error) { console.error("Feedback cleanup:", error); } });
+    revalidatePath(`/dashboard/assignment/${data.assignment_id}`);
+    revalidatePath(`/assignment/${data.assignment_id}`);
     if (data.student_id) revalidatePath(`/dashboard/analytics/${data.student_id}`);
     revalidatePath("/dashboard/analytics");
     return data;
